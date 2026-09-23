@@ -4,8 +4,8 @@ import os
 import base64
 import streamlit as st
 from PIL import Image, ImageOps
-import pytesseract
 from weasyprint import HTML
+from openai import OpenAI
 
 st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered")
 st.title("SUJA'S KITCHEN - Name Card Generator")
@@ -15,14 +15,21 @@ CARDS_PER_PAGE = 10
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
+# --- Sidebar API Key Input ---
+st.sidebar.header("🔑 AI Settings")
+openai_api_key = st.sidebar.text_input(
+    "OpenAI API Key",
+    type="password",
+    value=st.secrets.get("OPENAI_API_KEY", ""),
+    help="Enter your OpenAI key starting with 'sk-'. You can also store it in Streamlit Secrets."
+)
+
 def load_logo_base64():
-    """Searches for common logo filenames in repo and converts to Base64 data URL."""
     possible_filenames = [
         "logo.png", "logo.jpeg", "logo.jpg",
         "Suja's Transparent Logo.jpeg", "Suja's Transparent Logo.png",
         "Suja's Transparent Logo.jpg"
     ]
-    
     for filename in possible_filenames:
         if os.path.exists(filename):
             with open(filename, "rb") as f:
@@ -31,77 +38,55 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
-def auto_rotate_image(pil_img):
-    """Detects image orientation using EXIF and Tesseract OSD, rotating it upright."""
+def pil_to_base64(pil_img):
+    """Converts PIL image to base64 JPEG for OpenAI Vision API."""
     img = ImageOps.exif_transpose(pil_img)
+    buffered = base64.b64encode(st.session_state.get("uploaded_bytes", b""))
     
-    try:
-        osd = pytesseract.image_to_osd(img)
-        angle_match = re.search(r'Rotate:\s*(\d+)', osd)
-        if angle_match:
-            angle = int(angle_match.group(1))
-            if angle in [90, 180, 270]:
-                img = img.rotate(-angle, expand=True)
-    except Exception:
-        pass
-        
-    return img
+    # Fallback encoding if bytes not in session state
+    import io
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG")
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-def clean_and_extract_food_names(raw_ocr_text):
+def extract_dishes_with_ai(pil_img, api_key):
+    """Uses GPT-4o-mini Vision to extract clean dish names from the photo."""
+    client = OpenAI(api_key=api_key)
+    base64_image = pil_to_base64(pil_img)
+
+    prompt = """
+    You are an assistant for a catering company. Analyze this photo of a menu/food list table.
+    
+    CRITICAL INSTRUCTIONS:
+    1. Extract ONLY the food dish names.
+    2. Completely IGNORE quantities (e.g., '6 ltr', '10 ltr', '12 kg', '90'), headers ('Item', 'Office', 'Jafza'), dates, and order numbers.
+    3. Remove unit descriptors from dish names, like '(ltr)', '(kg)', or '(Boneless)'. E.g., 'Chicken khorma (ltr)' becomes 'Chicken Khorma'.
+    4. If a line contains items separated by slashes '/' (e.g., 'Letuce/Tomato/Cucumber/Radish'), SPLIT them into separate dish names, one per line.
+    5. Convert all dish names to Proper Title Case (e.g., 'Papdi Chat', 'Butter Paneer').
+    6. Return ONLY a plain text list with one dish name per line. No bullet points, no markdown formatting, no commentary.
     """
-    Strictly filters OCR text to extract ONLY food names:
-    - Ignores dates (e.g. '23rd Sep'), headers, PAX counts, and QTY labels.
-    - Excludes items with empty quantity or '-' entries.
-    - Strips parenthesis note content e.g. '(Boneless)'.
-    - Splits items separated by '/' into individual dish cards.
-    """
-    lines = raw_ocr_text.split('\n')
-    extracted_dishes = []
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        },
+                    },
+                ],
+            }
+        ],
+        max_tokens=500,
+    )
     
-    ignore_keywords = [
-        "VAN OORD", "PATHRAM", "PAX", "ITEM", "QTY", "SHEET",
-        "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
-    ]
-    
-    for line in lines:
-        clean_line = line.strip()
-        if not clean_line:
-            continue
-            
-        if any(keyword in clean_line.upper() for keyword in ignore_keywords):
-            continue
-
-        if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
-            continue
-
-        qty_match = re.search(r'^(.*?)\s+([\d\/\.\s]*(?:Ltr|Kg|Ps|Pcs)?|-)\s*$', clean_line, re.IGNORECASE)
-        
-        if qty_match:
-            item_name = qty_match.group(1).strip()
-            qty_val = qty_match.group(2).strip()
-            
-            if not qty_val or qty_val == "-":
-                continue
-        else:
-            item_name = clean_line
-
-        item_name = re.sub(r'\(.*?\)', '', item_name).strip()
-        item_name = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', item_name, flags=re.IGNORECASE).strip()
-
-        if not item_name or item_name.isdigit() or item_name == "-" or len(item_name) < 2:
-            continue
-
-        if '/' in item_name:
-            parts = [p.strip().title() for p in item_name.split('/') if p.strip()]
-            for p in parts:
-                if p not in extracted_dishes:
-                    extracted_dishes.append(p)
-        else:
-            formatted_name = item_name.title()
-            if formatted_name not in extracted_dishes:
-                extracted_dishes.append(formatted_name)
-                
-    return extracted_dishes
+    result_text = response.choices[0].message.content.strip()
+    return result_text
 
 def generate_html_pdf(items_list, logo_b64):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
@@ -213,15 +198,20 @@ if not logo_b64:
 uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", type=["jpg", "jpeg", "png"])
 
 if uploaded_image:
-    raw_img = Image.open(uploaded_image)
-    img = auto_rotate_image(raw_img)
+    img = Image.open(uploaded_image)
+    st.image(img, caption="Uploaded Image", use_container_width=True)
     
-    st.image(img, caption="Uploaded Image (Orientation Corrected)", use_container_width=True)
-    
-    if st.button("Extract Dish Names", type="primary"):
-        raw_ocr = pytesseract.image_to_string(img, config='--oem 3 --psm 6')
-        cleaned_list = clean_and_extract_food_names(raw_ocr)
-        st.session_state.dish_text = "\n".join(cleaned_list)
+    if st.button("✨ Extract Dish Names with AI", type="primary"):
+        if not openai_api_key:
+            st.error("Please enter an OpenAI API Key in the sidebar on the left!")
+        else:
+            with st.spinner("AI is analyzing the photo and extracting dishes..."):
+                try:
+                    cleaned_dishes = extract_dishes_with_ai(img, openai_api_key)
+                    st.session_state.dish_text = cleaned_dishes
+                    st.success("Extraction complete!")
+                except Exception as e:
+                    st.error(f"AI Extraction Error: {str(e)}")
 
 st.subheader("2. Review & Edit Items (1 per line)")
 items_input = st.text_area("Dish List", value=st.session_state.dish_text, height=250)
