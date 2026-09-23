@@ -35,51 +35,72 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
-def clean_and_extract_food_names(raw_lines):
+def filter_and_clean_dishes(ocr_results):
+    """
+    Custom extraction pipeline:
+    1. Keeps only items located in the left-most column (x-position filter).
+    2. Strips out all parenthetical content like (ltr) or (Boneless).
+    3. Discards dates, pure numbers, and headers.
+    4. Splits items separated by slashes '/' into individual entries.
+    """
+    if not ocr_results:
+        return []
+
+    # 1. Determine bounding box for the first column (x-axis coordinates)
+    x_midpoints = [bbox[0][0] for bbox, text, prob in ocr_results]
+    min_x = min(x_midpoints)
+    max_x = max(x_midpoints)
+    x_range = max_x - min_x
+    
+    # Threshold to isolate the first column (~45% of total horizontal text width)
+    first_col_threshold = min_x + (x_range * 0.45) if x_range > 0 else min_x + 200
+
     extracted_dishes = []
     
     ignore_keywords = [
-        "VAN OORD", "PATHRAM", "PAX", "ITEM", "QTY", "SHEET", "OFFICE", "JAFZA",
+        "ITEM", "QTY", "PAX", "SHEET", "OFFICE", "JAFZA", "DATE", "VAN OORD", "PATHRAM",
         "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
     ]
-    
-    for line in raw_lines:
-        clean_line = line.strip()
-        if not clean_line:
+
+    for bbox, text, prob in ocr_results:
+        x_start = bbox[0][0]
+        
+        # Only process text in the first column
+        if x_start > first_col_threshold:
             continue
             
+        clean_line = text.strip()
+        if not clean_line:
+            continue
+
+        # Ignore explicit table headers or dates
         if any(keyword in clean_line.upper() for keyword in ignore_keywords):
             continue
 
         if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
             continue
 
-        qty_match = re.search(r'^(.*?)\s+([\d\/\.\s]*(?:Ltr|Kg|Ps|Pcs)?|-)\s*$', clean_line, re.IGNORECASE)
+        # Remove parentheses and everything inside them e.g. "Chicken Khorma (ltr)" -> "Chicken Khorma"
+        clean_line = re.sub(r'\(.*?\)', '', clean_line).strip()
         
-        if qty_match:
-            item_name = qty_match.group(1).strip()
-            qty_val = qty_match.group(2).strip()
-            if not qty_val or qty_val == "-":
-                continue
-        else:
-            item_name = clean_line
+        # Remove trailing single quantities or standalone units
+        clean_line = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', clean_line, flags=re.IGNORECASE).strip()
 
-        item_name = re.sub(r'\(.*?\)', '', item_name).strip()
-        item_name = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', item_name, flags=re.IGNORECASE).strip()
-
-        if not item_name or item_name.isdigit() or item_name == "-" or len(item_name) < 2:
+        # Reject pure numbers, dashes, or short noise strings
+        if not clean_line or clean_line.isdigit() or clean_line == "-" or len(clean_line) < 2:
             continue
 
-        if '/' in item_name:
-            parts = [p.strip().title() for p in item_name.split('/') if p.strip()]
+        # Split items separated by slashes '/' into distinct entries
+        if '/' in clean_line:
+            parts = [p.strip().title() for p in clean_line.split('/') if p.strip()]
             for p in parts:
                 if p not in extracted_dishes and len(p) > 1:
                     extracted_dishes.append(p)
         else:
-            formatted_name = item_name.title()
+            formatted_name = clean_line.title()
             if formatted_name not in extracted_dishes:
                 extracted_dishes.append(formatted_name)
-                
+
     return extracted_dishes
 
 def generate_html_pdf(items_list, logo_b64):
@@ -197,11 +218,12 @@ if uploaded_image:
     st.image(img, caption="Uploaded Image", use_container_width=True)
     
     if st.button("Extract Dish Names", type="primary"):
-        with st.spinner("Extracting dish names..."):
+        with st.spinner("Extracting dish names from first column..."):
             reader = load_ocr_reader()
             img_np = np.array(img.convert('RGB'))
-            results = reader.readtext(img_np, detail=0)
-            cleaned_list = clean_and_extract_food_names(results)
+            # Detail=1 yields bounding box metadata needed to isolate the first column
+            results = reader.readtext(img_np, detail=1)
+            cleaned_list = filter_and_clean_dishes(results)
             st.session_state.dish_text = "\n".join(cleaned_list)
 
 st.subheader("2. Review & Edit Items (1 per line)")
