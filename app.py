@@ -32,14 +32,16 @@ def generate_cards_pdf(items_list, logo_b64):
         page_items = items_list[p * CARDS_PER_PAGE : (p + 1) * CARDS_PER_PAGE]
         cards_html = ""
         for item in page_items:
-            # Dynamic Font Size Tiering based on text length
+            # Multi-tier text size scaling based on length
             text_len = len(item)
-            if text_len <= 18:
-                size_class = "size-large"    # 25px
-            elif text_len <= 30:
-                size_class = "size-medium"   # 20px
+            if text_len <= 16:
+                size_class = "size-25"
+            elif text_len <= 26:
+                size_class = "size-20"
+            elif text_len <= 40:
+                size_class = "size-16"
             else:
-                size_class = "size-small"    # 16px
+                size_class = "size-13"
 
             cards_html += f"""
             <div class="card-box">
@@ -83,65 +85,55 @@ def generate_cards_pdf(items_list, logo_b64):
           gap: 8mm;
           page-break-after: always;
         }}
+        /* FIXED DIMENSIONS - NEVER DEFORMS */
         .card-box {{
           position: relative;
+          width: 100%;
+          height: 100%;
           border: 3.5px solid #ca113b;
           border-radius: 14px;
           box-sizing: border-box;
           background: #ffffff;
           overflow: hidden;
-          
-          /* FLEXBOX CENTERING IN THE MIDDLE OF THE RED BOX */
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          text-align: center;
-          
-          padding-top: 55px;
-          padding-bottom: 15px;
-          padding-left: 14px;
-          padding-right: 14px;
         }}
         .card-logo {{
           position: absolute;
           top: 6px;
           right: 6px;
-          width: 55px;
-          height: 55px;
+          width: 50px;
+          height: 50px;
           object-fit: contain;
-          z-index: 1;
+          z-index: 2;
         }}
+        /* ABSOLUTELY POSITIONED CENTERED CONTAINER */
         .text-wrapper {{
-          width: 100%;
+          position: absolute;
+          top: 52px;
+          bottom: 8px;
+          left: 10px;
+          right: 10px;
           display: flex;
-          justify-content: center;
           align-items: center;
-          max-height: 100%;
+          justify-content: center;
+          text-align: center;
           overflow: hidden;
+          z-index: 10;
         }}
         .dish-name {{
           color: #000000;
           font-weight: 700;
-          line-height: 1.25;
+          line-height: 1.2;
           width: 100%;
           margin: 0;
           word-wrap: break-word;
           overflow-wrap: break-word;
-          
-          position: relative;
-          z-index: 10;
+          text-align: center;
         }}
-        /* DYNAMIC SCALING TIERS */
-        .size-large {{
-          font-size: 25px;
-        }}
-        .size-medium {{
-          font-size: 20px;
-        }}
-        .size-small {{
-          font-size: 16px;
-        }}
+        /* TEXT SHRINK TIERS */
+        .size-25 {{ font-size: 25px; }}
+        .size-20 {{ font-size: 20px; }}
+        .size-16 {{ font-size: 16px; }}
+        .size-13 {{ font-size: 13px; }}
       </style>
     </head>
     <body>
