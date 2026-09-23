@@ -2,3 +2,5 @@ streamlit
 pillow
 weasyprint
 pytesseract
+opencv-python-headless
+numpy
