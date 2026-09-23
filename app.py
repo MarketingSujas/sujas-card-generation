@@ -2,11 +2,10 @@ import math
 import re
 import os
 import base64
-import numpy as np
 import streamlit as st
 from PIL import Image, ImageOps
+import pytesseract
 from weasyprint import HTML
-import easyocr
 
 st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered")
 st.title("SUJA'S KITCHEN - Name Card Generator")
@@ -15,11 +14,6 @@ CARDS_PER_PAGE = 10
 
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
-
-@st.cache_resource
-def load_ocr_reader():
-    """Loads lightweight EasyOCR without GPU or heavy memory footprint."""
-    return easyocr.Reader(['en'], gpu=False, download_enabled=True)
 
 def load_logo_base64():
     possible_filenames = [
@@ -35,16 +29,37 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
-def filter_and_clean_dishes(ocr_results):
-    if not ocr_results:
-        return []
-
-    x_midpoints = [bbox[0][0] for bbox, text, prob in ocr_results]
-    min_x = min(x_midpoints)
-    max_x = max(x_midpoints)
-    x_range = max_x - min_x
+def filter_and_clean_dishes(pil_img):
+    """
+    Lightweight extraction:
+    1. Isolates text from the primary left column using horizontal coordinates.
+    2. Completely strips out parenthetical notes like (ltr) or (Boneless).
+    3. Splits items separated by slashes '/' into separate dish entries.
+    4. Discards headers, dates, and pure numbers.
+    """
+    img = ImageOps.exif_transpose(pil_img)
     
-    first_col_threshold = min_x + (x_range * 0.45) if x_range > 0 else min_x + 200
+    # Get word level bounding box metadata to isolate first column
+    data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+    
+    n_boxes = len(data['text'])
+    valid_words = []
+    
+    # Find image horizontal dimensions to isolate primary left column
+    width, height = img.size
+    first_col_limit = width * 0.55  # Capture items in the left-hand column
+    
+    for i in range(n_boxes):
+        text = data['text'][i].strip()
+        left = data['left'][i]
+        
+        if text and left < first_col_limit:
+            valid_words.append((data['line_num'][i], text))
+
+    # Group words back into lines
+    lines_dict = {}
+    for line_num, word in valid_words:
+        lines_dict.setdefault(line_num, []).append(word)
 
     extracted_dishes = []
     ignore_keywords = [
@@ -52,26 +67,25 @@ def filter_and_clean_dishes(ocr_results):
         "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
     ]
 
-    for bbox, text, prob in ocr_results:
-        x_start = bbox[0][0]
-        if x_start > first_col_threshold:
+    for line_words in lines_dict.values():
+        clean_line = " ".join(line_words).strip()
+        if not clean_line:
             continue
-            
-        clean_line = text.strip()
-        if not clean_line or any(keyword in clean_line.upper() for keyword in ignore_keywords):
+
+        if any(keyword in clean_line.upper() for keyword in ignore_keywords):
             continue
 
         if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
             continue
 
-        # Strip parentheses content
+        # Strip parentheses and internal text e.g., "(ltr)" or "(Boneless)"
         clean_line = re.sub(r'\(.*?\)', '', clean_line).strip()
         clean_line = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', clean_line, flags=re.IGNORECASE).strip()
 
         if not clean_line or clean_line.isdigit() or clean_line == "-" or len(clean_line) < 2:
             continue
 
-        # Split entries with slashes
+        # Split slash items into individual entries
         if '/' in clean_line:
             parts = [p.strip().title() for p in clean_line.split('/') if p.strip()]
             for p in parts:
@@ -193,16 +207,12 @@ uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", typ
 
 if uploaded_image:
     img = Image.open(uploaded_image)
-    img = ImageOps.exif_transpose(img)
     st.image(img, caption="Uploaded Image", use_container_width=True)
     
     if st.button("Extract Dish Names", type="primary"):
         with st.spinner("Extracting dish names..."):
             try:
-                reader = load_ocr_reader()
-                img_np = np.array(img.convert('RGB'))
-                results = reader.readtext(img_np, detail=1)
-                cleaned_list = filter_and_clean_dishes(results)
+                cleaned_list = filter_and_clean_dishes(img)
                 st.session_state.dish_text = "\n".join(cleaned_list)
             except Exception as e:
                 st.error(f"Error processing image: {str(e)}")
