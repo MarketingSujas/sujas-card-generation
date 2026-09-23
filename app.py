@@ -153,19 +153,24 @@ def generate_html_pdf(items_list, logo_b64):
           background: #ffffff;
           overflow: hidden;
           
+          /* LAYOUT SHIFT: Shift content area down to avoid top-right logo overlap */
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: center;
           text-align: center;
-          padding: 16px 20px;
+          
+          padding-top: 50px;
+          padding-bottom: 12px;
+          padding-left: 14px;
+          padding-right: 14px;
         }}
         .card-logo {{
           position: absolute;
-          top: 8px;
-          right: 8px;
-          width: 75px;
-          height: 75px;
+          top: 6px;
+          right: 6px;
+          width: 60px;
+          height: 60px;
           object-fit: contain;
           z-index: 1;
         }}
@@ -177,9 +182,8 @@ def generate_html_pdf(items_list, logo_b64):
           margin: 0;
           word-wrap: break-word;
           overflow-wrap: break-word;
-          font-size: 20px;
+          font-size: 18px;
           
-          /* TOP-MOST LAYER STYLING */
           position: relative;
           z-index: 10;
         }}
