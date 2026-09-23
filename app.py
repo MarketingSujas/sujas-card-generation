@@ -70,7 +70,6 @@ def clean_and_extract_food_names(raw_ocr_text):
     return extracted_dishes
 
 def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=18, min_font_size=11):
-    """Draws pure black text perfectly centered vertically & horizontally inside the white frame."""
     font_name = "Helvetica-Bold"
     c.setFillColor(HexColor("#000000"))
 
@@ -82,11 +81,12 @@ def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=1
         lines = simpleSplit(text, font_name, font_size, max_width)
         
     c.setFont(font_name, font_size)
-    line_height = font_size * 1.25
+    # Tightened line spacing to keep wrapped titles compact
+    line_height = font_size * 1.05
     total_block_height = len(lines) * line_height
     
-    # Calculate initial Y to center the block relative to center_y
-    start_y = center_y + (total_block_height / 2.0) - (font_size * 0.8)
+    # Adjusted vertical start position to center the text block perfectly
+    start_y = center_y + (total_block_height / 2.0) - (font_size * 0.7)
     
     for i, line in enumerate(lines):
         y_pos = start_y - (i * line_height)
@@ -103,12 +103,11 @@ def generate_overlay(page_items):
         x_left = col * CARD_WIDTH
         y_bottom = PAGE_HEIGHT - ((row + 1) * CARD_HEIGHT)
         
-        # Absolute horizontal center of card
+        # Exact horizontal center
         center_x = x_left + (CARD_WIDTH / 2.0)
-        # Vertical center adjusted to sit squarely inside the printable white space
-        center_y = y_bottom + (CARD_HEIGHT * 0.54)
+        # Shifted up to 60% of cell height for optical visual centering
+        center_y = y_bottom + (CARD_HEIGHT * 0.60)
         
-        # Safe printable width padding
         max_width = CARD_WIDTH - (36 * mm)
         
         if item:
@@ -142,7 +141,6 @@ uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", typ
 
 if uploaded_image:
     img = Image.open(uploaded_image)
-    # Fix orientation automatically from mobile camera EXIF metadata
     img = ImageOps.exif_transpose(img)
     
     st.image(img, caption="Uploaded Image (Orientation Corrected)", use_container_width=True)
