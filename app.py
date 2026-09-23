@@ -30,32 +30,25 @@ def load_logo_base64():
     return ""
 
 def preprocess_and_clean_image(pil_img):
-    """
-    Pure Pillow image preprocessing to boost contrast and eliminate grid lines
-    without relying on external C-compiled binaries like OpenCV.
-    """
+    """Clean contrast and isolate text structure for non-conventional menus."""
     img = ImageOps.exif_transpose(pil_img).convert("L")
     
-    # Increase contrast
     enhancer = ImageEnhance.Contrast(img)
     img = enhancer.enhance(2.0)
     
-    # Thresholding to high contrast B&W
     threshold = 180
     img = img.point(lambda p: 255 if p > threshold else 0)
     
-    # Median filter to clean up line noise and borders
     img = img.filter(ImageFilter.MedianFilter(size=3))
     return img
 
 def extract_first_column_dishes(pil_img):
     cleaned_img = preprocess_and_clean_image(pil_img)
     
-    # Run pytesseract with page segmentation mode 6 (assumes uniform block of text)
     data = pytesseract.image_to_data(cleaned_img, config='--psm 6', output_type=pytesseract.Output.DICT)
     
     width, _ = cleaned_img.size
-    first_col_limit = width * 0.55  # Isolates left-most dish column
+    first_col_limit = width * 0.55
     
     lines_dict = {}
     for i in range(len(data['text'])):
@@ -83,14 +76,14 @@ def extract_first_column_dishes(pil_img):
         if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
             continue
 
-        # 1. Strip text inside parentheses () completely
+        # 1. Strip parentheses completely
         clean_line = re.sub(r'\(.*?\)', '', clean_line).strip()
         clean_line = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', clean_line, flags=re.IGNORECASE).strip()
 
         if not clean_line or clean_line.isdigit() or clean_line == "-" or len(clean_line) < 2:
             continue
 
-        # 2. Split items with slashes '/' into separate entries
+        # 2. Split slashes into separate entries
         if '/' in clean_line:
             parts = [p.strip().title() for p in clean_line.split('/') if p.strip()]
             for p in parts:
