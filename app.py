@@ -33,7 +33,7 @@ def load_logo_base64():
     return ""
 
 def extract_dishes_with_gemini(pil_img, api_key):
-    """Uses Gemini Flash with automatic fallback models to ensure zero 503 errors."""
+    """Uses active Gemini Flash models with automatic fallback to guarantee availability."""
     client = genai.Client(api_key=api_key)
     
     # Fix orientation from mobile camera EXIF metadata
@@ -51,8 +51,8 @@ def extract_dishes_with_gemini(pil_img, api_key):
     6. Return ONLY a plain text list with one dish name per line. No bullet points, no markdown formatting, no commentary.
     """
 
-    # List of models to cycle through in case of 503 high-demand errors
-    fallback_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    # Primary supported model identifiers
+    fallback_models = ["gemini-2.5-flash", "gemini-2.0-flash"]
     last_error = None
 
     for model_name in fallback_models:
@@ -64,7 +64,6 @@ def extract_dishes_with_gemini(pil_img, api_key):
             return response.text.strip()
         except Exception as e:
             last_error = e
-            # If 503 or model error occurs, silently continue to the next model
             continue
 
     raise last_error
