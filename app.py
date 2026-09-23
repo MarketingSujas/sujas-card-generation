@@ -10,7 +10,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor
-from reportlab.utils import simpleSplit
+from reportlab.lib.utils import simpleSplit
 
 st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered")
 st.title("SUJA'S KITCHEN - Name Card Generator")
@@ -70,7 +70,6 @@ def clean_and_extract_food_names(raw_ocr_text):
     return extracted_dishes
 
 def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=15, min_font_size=9):
-    """Draws pure black text, perfectly centered horizontally and vertically with multi-line wrap if long."""
     font_name = "Helvetica-Bold"
     c.setFont(font_name, start_font_size)
     c.setFillColor(HexColor("#000000"))  # Pure Black
@@ -78,7 +77,6 @@ def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=1
     # Split text into multiple lines if longer than max_width
     lines = simpleSplit(text, font_name, start_font_size, max_width)
     
-    # If still too long, reduce font size
     font_size = start_font_size
     while len(lines) > 2 and font_size > min_font_size:
         font_size -= 0.5
@@ -88,7 +86,6 @@ def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=1
     line_height = font_size * 1.2
     total_height = len(lines) * line_height
     
-    # Starting Y position for vertical center
     start_y = center_y + (total_height / 2.0) - (font_size * 0.7)
     
     for i, line in enumerate(lines):
@@ -106,11 +103,11 @@ def generate_overlay(page_items):
         x_left = col * CARD_WIDTH
         y_bottom = PAGE_HEIGHT - ((row + 1) * CARD_HEIGHT)
         
-        # Exact horizontal & vertical center of each card frame
+        # Center of each card frame
         center_x = x_left + (CARD_WIDTH / 2.0)
         center_y = y_bottom + (CARD_HEIGHT * 0.38)
         
-        # Strict inner printable boundary (prevents overflow off card borders)
+        # Inner printable boundary (prevents overflow off card borders)
         max_width = CARD_WIDTH - (40 * mm)
         
         if item:
