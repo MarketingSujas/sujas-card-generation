@@ -21,7 +21,6 @@ CARD_HEIGHT = PAGE_HEIGHT / ROWS
 
 TEMPLATE_PATH = "Mess Name cards template.pdf"
 
-# Initialize session state for extracted text if not present
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
@@ -29,39 +28,62 @@ def clean_and_split_items(raw_text):
     lines = raw_text.split('\n')
     cleaned_items = []
     
+    # Common non-dish keywords, quantities, and dates to remove
+    ignore_patterns = [
+        r'PATHRAM', r'SHEET', r'PAX', r'23RD', r'SEP', r'ITEM', r'QTY',
+        r'LTR', r'KG', r'PS', r'^\d+$', r'^-+$'
+    ]
+    
     for line in lines:
-        if not line.strip() or "PATHRAM" in line.upper() or "QTY" in line.upper():
+        line_clean = line.strip()
+        if not line_clean:
             continue
             
-        # Remove text in parentheses
-        text = re.sub(r'\(.*?\)', '', line).strip()
+        # Skip header lines, date lines, or quantity-only lines
+        if any(re.search(pat, line_clean.upper()) for pat in ignore_patterns):
+            continue
+
+        # Strip out parentheses and their contents, e.g. "(Boneless)" -> ""
+        text = re.sub(r'\(.*?\)', '', line_clean).strip()
         
-        # Split items separated by /
+        # Strip out quantities appended at the end of line (e.g. "6 Ltr", "8 Kg", "85 Ps")
+        text = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Liters|Kgs|Pcs)?$', '', text, flags=re.IGNORECASE).strip()
+        
+        # Remove standalone digits or special characters
+        if not text or text.isdigit() or text == "-":
+            continue
+
+        # Split items separated by / (e.g. "Aloo/subji" -> "Aloo", "Subji")
         if '/' in text:
             parts = [p.strip() for p in text.split('/') if p.strip()]
             for p in parts:
-                cleaned_items.append(p.title())
-        elif text:
-            cleaned_items.append(text.title())
+                if p.title() not in cleaned_items:
+                    cleaned_items.append(p.title())
+        else:
+            if text.title() not in cleaned_items:
+                cleaned_items.append(text.title())
             
     return cleaned_items
 
-def draw_centered_text(c, text, center_x, center_y, max_width, max_font_size=16, min_font_size=8):
+def draw_centered_text(c, text, center_x, center_y, max_width, max_font_size=15, min_font_size=8):
+    """Resizes and vertically/horizontally centers text cleanly inside card box."""
     font_name = "Helvetica-Bold"
     font_size = max_font_size
     c.setFont(font_name, font_size)
     
+    # Scale down font size if string width exceeds card margin width
     while c.stringWidth(text, font_name, font_size) > max_width and font_size > min_font_size:
         font_size -= 0.5
         c.setFont(font_name, font_size)
         
+    # Vertical offset calculation for exact font center alignment
     y_adjusted = center_y - (font_size * 0.35)
     c.drawCentredString(center_x, y_adjusted, text)
 
 def generate_overlay(page_items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=A4)
-    c.setFillColorRGB(0.1, 0.1, 0.1)
+    c.setFillColorRGB(0.1, 0.1, 0.1) # Charcoal black text
 
     for idx, item in enumerate(page_items):
         col = idx % COLUMNS
@@ -70,9 +92,13 @@ def generate_overlay(page_items):
         x_left = col * CARD_WIDTH
         y_bottom = PAGE_HEIGHT - ((row + 1) * CARD_HEIGHT)
         
+        # True Card Center Point
         center_x = x_left + (CARD_WIDTH / 2.0)
-        center_y = y_bottom + (CARD_HEIGHT * 0.38)
-        max_width = CARD_WIDTH - (20 * mm)
+        # Position centered vertically below the top logo header
+        center_y = y_bottom + (CARD_HEIGHT * 0.35)
+        
+        # Horizontal safety width padding (keeps text away from side borders)
+        max_width = CARD_WIDTH - (30 * mm)
         
         if item:
             draw_centered_text(c, str(item).strip(), center_x, center_y, max_width)
@@ -115,7 +141,7 @@ if uploaded_image:
 st.subheader("2. Review & Edit Items (1 per line)")
 items_input = st.text_area("Dish List", value=st.session_state.dish_text, height=250)
 
-# Update state if user manually edits text
+# Synchronize edited state
 st.session_state.dish_text = items_input
 
 items_list = [line.strip() for line in items_input.split("\n") if line.strip()]
@@ -123,7 +149,7 @@ items_list = [line.strip() for line in items_input.split("\n") if line.strip()]
 if items_list:
     if st.button("Generate Final PDF"):
         if not os.path.exists(TEMPLATE_PATH):
-            st.error(f"Template file '{TEMPLATE_PATH}' not found in GitHub repository. Please upload it to GitHub.")
+            st.error(f"Template file '{TEMPLATE_PATH}' not found in GitHub repository. Please upload it.")
         else:
             pdf_out = create_printable_pdf(TEMPLATE_PATH, items_list)
             st.success(f"Generated {len(items_list)} cards across {math.ceil(len(items_list)/10)} page(s)!")
