@@ -1,19 +1,13 @@
 import math
-import re
 import os
 import base64
 import streamlit as st
-from PIL import Image, ImageOps, ImageFilter, ImageEnhance
-import pytesseract
 from weasyprint import HTML
 
-st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered")
-st.title("SUJA'S KITCHEN - Name Card Generator")
+st.set_page_config(page_title="Suja's Kitchen Generator", layout="centered")
+st.title("SUJA'S KITCHEN - Name Card & Menu Generator")
 
 CARDS_PER_PAGE = 10
-
-if "dish_text" not in st.session_state:
-    st.session_state.dish_text = ""
 
 def load_logo_base64():
     possible_filenames = [
@@ -29,74 +23,7 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
-def preprocess_and_clean_image(pil_img):
-    """Clean contrast and isolate text structure for non-conventional menus."""
-    img = ImageOps.exif_transpose(pil_img).convert("L")
-    
-    enhancer = ImageEnhance.Contrast(img)
-    img = enhancer.enhance(2.0)
-    
-    threshold = 180
-    img = img.point(lambda p: 255 if p > threshold else 0)
-    
-    img = img.filter(ImageFilter.MedianFilter(size=3))
-    return img
-
-def extract_first_column_dishes(pil_img):
-    cleaned_img = preprocess_and_clean_image(pil_img)
-    
-    data = pytesseract.image_to_data(cleaned_img, config='--psm 6', output_type=pytesseract.Output.DICT)
-    
-    width, _ = cleaned_img.size
-    first_col_limit = width * 0.55
-    
-    lines_dict = {}
-    for i in range(len(data['text'])):
-        text = data['text'][i].strip()
-        left = data['left'][i]
-        line_num = data['line_num'][i]
-        
-        if text and left < first_col_limit:
-            lines_dict.setdefault(line_num, []).append(text)
-
-    extracted_dishes = []
-    ignore_keywords = [
-        "ITEM", "QTY", "PAX", "SHEET", "OFFICE", "JAFZA", "DATE", "VAN OORD", "PATHRAM",
-        "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
-    ]
-
-    for line_words in lines_dict.values():
-        clean_line = " ".join(line_words).strip()
-        if not clean_line:
-            continue
-
-        if any(keyword in clean_line.upper() for keyword in ignore_keywords):
-            continue
-
-        if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
-            continue
-
-        # 1. Strip parentheses completely
-        clean_line = re.sub(r'\(.*?\)', '', clean_line).strip()
-        clean_line = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', clean_line, flags=re.IGNORECASE).strip()
-
-        if not clean_line or clean_line.isdigit() or clean_line == "-" or len(clean_line) < 2:
-            continue
-
-        # 2. Split slashes into separate entries
-        if '/' in clean_line:
-            parts = [p.strip().title() for p in clean_line.split('/') if p.strip()]
-            for p in parts:
-                if p not in extracted_dishes and len(p) > 1:
-                    extracted_dishes.append(p)
-        else:
-            formatted_name = clean_line.title()
-            if formatted_name not in extracted_dishes:
-                extracted_dishes.append(formatted_name)
-
-    return extracted_dishes
-
-def generate_html_pdf(items_list, logo_b64):
+def generate_cards_pdf(items_list, logo_b64):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
     pages_html = ""
     logo_html = f'<img src="{logo_b64}" class="card-logo" />' if logo_b64 else ''
@@ -153,7 +80,6 @@ def generate_html_pdf(items_list, logo_b64):
           background: #ffffff;
           overflow: hidden;
           
-          /* LAYOUT SHIFT: Shift content area down to avoid top-right logo overlap */
           display: flex;
           flex-direction: column;
           justify-content: center;
@@ -196,6 +122,73 @@ def generate_html_pdf(items_list, logo_b64):
     """
     return HTML(string=html_content).write_pdf()
 
+def generate_menu_pdf(soups_salads, mains_desserts, logo_b64):
+    """Placeholder renderer for Menu Layout (ready for second design rules)."""
+    logo_html = f'<img src="{logo_b64}" class="menu-logo" />' if logo_b64 else ''
+    
+    soups_html = "".join([f"<li>{item}</li>" for item in soups_salads])
+    mains_html = "".join([f"<li>{item}</li>" for item in mains_desserts])
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <style>
+        @page {{
+          size: A4;
+          margin: 0;
+        }}
+        body {{
+          margin: 0;
+          padding: 15mm;
+          font-family: "Helvetica", "Arial", sans-serif;
+          color: #000000;
+        }}
+        .menu-header {{
+          text-align: center;
+          position: relative;
+          margin-bottom: 30px;
+        }}
+        .menu-logo {{
+          width: 90px;
+          height: 90px;
+          object-fit: contain;
+        }}
+        .section-title {{
+          color: #ca113b;
+          font-size: 22px;
+          border-bottom: 2px solid #ca113b;
+          padding-bottom: 5px;
+          margin-top: 25px;
+        }}
+        ul {{
+          list-style-type: none;
+          padding: 0;
+        }}
+        li {{
+          font-size: 16px;
+          font-weight: bold;
+          margin-bottom: 10px;
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="menu-header">
+        {logo_html}
+        <h1 style="color: #ca113b; margin-top: 10px;">TODAY'S MENU</h1>
+      </div>
+
+      <div class="section-title">Soups & Salads</div>
+      <ul>{soups_html}</ul>
+
+      <div class="section-title">Mains & Desserts</div>
+      <ul>{mains_html}</ul>
+    </body>
+    </html>
+    """
+    return HTML(string=html_content).write_pdf()
+
 # --- User Interface ---
 logo_b64 = load_logo_base64()
 
@@ -205,34 +198,43 @@ if not logo_b64:
         encoded_logo = base64.b64encode(logo_file.read()).decode("utf-8")
         logo_b64 = f"data:{logo_file.type};base64,{encoded_logo}"
 
-uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", type=["jpg", "jpeg", "png"])
+# Binary Mode Selector
+doc_type = st.radio("Select Document Type", ["Cards", "Menus"], horizontal=True)
 
-if uploaded_image:
-    img = Image.open(uploaded_image)
-    st.image(img, caption="Uploaded Image", use_container_width=True)
+if doc_type == "Cards":
+    st.subheader("Card Items (1 per line)")
+    card_text = st.text_area("Enter Dish Names", height=250)
+    card_items = [line.strip() for line in card_text.split("\n") if line.strip()]
+
+    if card_items:
+        if st.button("Generate Cards PDF", type="primary"):
+            pdf_bytes = generate_cards_pdf(card_items, logo_b64)
+            st.success(f"Generated {len(card_items)} card(s) across {math.ceil(len(card_items)/10)} page(s)!")
+            
+            st.download_button(
+                label="📥 Download Printable Cards PDF",
+                data=pdf_bytes,
+                file_name="Printable_Name_Cards.pdf",
+                mime="application/pdf"
+            )
+
+else:
+    st.subheader("Menu Items")
     
-    if st.button("Extract Dish Names", type="primary"):
-        with st.spinner("Extracting dish names..."):
-            try:
-                cleaned_list = extract_first_column_dishes(img)
-                st.session_state.dish_text = "\n".join(cleaned_list)
-            except Exception as e:
-                st.error(f"Error processing image: {str(e)}")
+    soups_salads_text = st.text_area("Soups & Salads (1 per line)", height=150)
+    mains_desserts_text = st.text_area("Mains & Desserts (1 per line)", height=200)
 
-st.subheader("2. Review & Edit Items (1 per line)")
-items_input = st.text_area("Dish List", value=st.session_state.dish_text, height=250)
-st.session_state.dish_text = items_input
+    soups_salads = [line.strip() for line in soups_salads_text.split("\n") if line.strip()]
+    mains_desserts = [line.strip() for line in mains_desserts_text.split("\n") if line.strip()]
 
-items_list = [line.strip() for line in items_input.split("\n") if line.strip()]
-
-if items_list:
-    if st.button("Generate Final PDF"):
-        pdf_bytes = generate_html_pdf(items_list, logo_b64)
-        st.success(f"Generated {len(items_list)} cards across {math.ceil(len(items_list)/10)} page(s)!")
-        
-        st.download_button(
-            label="📥 Download Printable PDF",
-            data=pdf_bytes,
-            file_name="Printable_Mess_Cards.pdf",
-            mime="application/pdf"
-        )
+    if soups_salads or mains_desserts:
+        if st.button("Generate Menu PDF", type="primary"):
+            pdf_bytes = generate_menu_pdf(soups_salads, mains_desserts, logo_b64)
+            st.success("Generated Menu PDF!")
+            
+            st.download_button(
+                label="📥 Download Menu PDF",
+                data=pdf_bytes,
+                file_name="Printable_Menu.pdf",
+                mime="application/pdf"
+            )
