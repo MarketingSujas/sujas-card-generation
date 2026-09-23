@@ -9,6 +9,7 @@ from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.lib.colors import HexColor
 
 st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered")
 st.title("SUJA'S KITCHEN - Name Card Generator")
@@ -25,16 +26,9 @@ if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
 def clean_and_extract_food_names(raw_ocr_text):
-    """
-    Parses table OCR text line by line:
-    - Ignores header/date rows.
-    - Excludes items with no entry, empty string, or '-' in the Qty column.
-    - Strips parentheses and splits slashes '/'.
-    """
     lines = raw_ocr_text.split('\n')
     extracted_dishes = []
     
-    # Headers and date keywords to ignore completely
     header_keywords = ["VAN OORD", "PATHRAM", "23RD", "SEP", "PAX", "ITEM", "QTY"]
     
     for line in lines:
@@ -42,35 +36,26 @@ def clean_and_extract_food_names(raw_ocr_text):
         if not clean_line:
             continue
             
-        # Skip top header rows
         if any(keyword in clean_line.upper() for keyword in header_keywords):
             continue
 
-        # Detect quantity pattern at the end of the line (e.g., "6 Ltr", "8 Kg", "200 Ps", "20/40", "-")
-        # Match dish name vs quantity
         qty_match = re.search(r'^(.*?)\s+([\d\/\.\s]*(?:Ltr|Kg|Ps|Pcs)?|-)\s*$', clean_line, re.IGNORECASE)
         
         if qty_match:
             item_name = qty_match.group(1).strip()
             qty_val = qty_match.group(2).strip()
             
-            # Rule: Ignore items where quantity is '-' or empty
             if not qty_val or qty_val == "-":
                 continue
         else:
-            # Fallback if regex didn't split quantity
             item_name = clean_line
 
-        # Remove parenthesis content e.g. "(Boneless)" -> ""
         item_name = re.sub(r'\(.*?\)', '', item_name).strip()
-        
-        # Remove any residual trailing digits/units that weren't caught
         item_name = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', item_name, flags=re.IGNORECASE).strip()
 
         if not item_name or item_name.isdigit() or item_name == "-":
             continue
 
-        # Split items with slashes (e.g. "Aloo/subji" -> "Aloo", "Subji")
         if '/' in item_name:
             parts = [p.strip().title() for p in item_name.split('/') if p.strip()]
             for p in parts:
@@ -84,23 +69,26 @@ def clean_and_extract_food_names(raw_ocr_text):
     return extracted_dishes
 
 def draw_centered_text(c, text, center_x, center_y, max_width, max_font_size=16, min_font_size=8):
-    """Centers food name inside card frame without overflowing borders."""
+    """Dynamically resizes and perfectly centers text vertically & horizontally."""
     font_name = "Helvetica-Bold"
     font_size = max_font_size
     c.setFont(font_name, font_size)
     
-    # Scale down font size dynamically if text is wide
+    # Scale down font size if string width exceeds card margin width
     while c.stringWidth(text, font_name, font_size) > max_width and font_size > min_font_size:
         font_size -= 0.5
         c.setFont(font_name, font_size)
         
+    # Vertical offset calculation for exact visual center alignment
     y_adjusted = center_y - (font_size * 0.35)
     c.drawCentredString(center_x, y_adjusted, text)
 
 def generate_overlay(page_items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=A4)
-    c.setFillColorRGB(0.1, 0.1, 0.1)
+    
+    # Brand Red Color: #CA113B
+    c.setFillColor(HexColor("#CA113B"))
 
     for idx, item in enumerate(page_items):
         col = idx % COLUMNS
@@ -109,12 +97,13 @@ def generate_overlay(page_items):
         x_left = col * CARD_WIDTH
         y_bottom = PAGE_HEIGHT - ((row + 1) * CARD_HEIGHT)
         
-        # Exact geometric center of the card box
+        # Center of each card box
         center_x = x_left + (CARD_WIDTH / 2.0)
-        center_y = y_bottom + (CARD_HEIGHT * 0.36)
+        # Recalibrated vertical center (accounting for logo space at top)
+        center_y = y_bottom + (CARD_HEIGHT * 0.48)
         
-        # Keep generous side margins to avoid touching card borders
-        max_width = CARD_WIDTH - (28 * mm)
+        # Safe horizontal padding (prevents overflow on left/right borders)
+        max_width = CARD_WIDTH - (34 * mm)
         
         if item:
             draw_centered_text(c, str(item).strip(), center_x, center_y, max_width)
