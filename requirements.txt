@@ -1,6 +1,6 @@
 streamlit
 pillow
-weasyprint
 pytesseract
-opencv-python-headless
 numpy
+weasyprint
+opencv-python-headless
