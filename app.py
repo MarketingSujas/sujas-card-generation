@@ -188,16 +188,16 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
           width: 210mm;
           height: 297mm;
           box-sizing: border-box;
-          padding: 12mm;
+          padding: 6mm;
           page-break-after: always;
         }}
-        /* THICK RED BORDER AROUND A4 SHEET */
+        /* ULTRA-THICK 24PX RED BORDER */
         .menu-border {{
           width: 100%;
           height: 100%;
-          border: 12px solid #c8102e;
+          border: 24px solid #c8102e;
           box-sizing: border-box;
-          padding: 15mm 10mm;
+          padding: 12mm 10mm;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -206,32 +206,32 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-bottom: 20px;
+          margin-bottom: 15px;
         }}
         .brand-logo {{
-          width: 120px;
-          height: 120px;
+          width: 135px;
+          height: 135px;
           object-fit: contain;
-          margin-bottom: 12px;
+          margin-bottom: 10px;
         }}
-        /* CALLIGRAPHY / CURSIVE HEADING IN BLACK */
+        /* LARGER CALLIGRAPHY HEADING (64PX) IN BLACK */
         .category-title {{
           color: #000000;
           font-family: 'Dancing Script', 'Great Vibes', 'Brush Script MT', cursive;
-          font-size: 48px;
+          font-size: 64px;
           font-weight: 700;
-          margin-bottom: 4px;
-          line-height: 1.1;
+          margin-bottom: 2px;
+          line-height: 1.05;
         }}
-        /* SMALL SUBTITLE FOR CLIENT/EVENT NAME */
+        /* SMALL CLIENT/EVENT NAME */
         .client-name {{
           color: #000000;
-          font-size: 13px;
-          font-weight: 600;
+          font-size: 18px;
+          font-weight: 700;
           letter-spacing: 2px;
           opacity: 0.85;
         }}
-        /* EQUIDISTANT FLEX DISTRIBUTION BETWEEN HEADER AND END OF BORDER */
+        /* EQUIDISTANT VERTICAL DISTRIBUTION */
         .items-container {{
           width: 100%;
           flex-grow: 1;
@@ -239,15 +239,15 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
           flex-direction: column;
           justify-content: space-evenly;
           align-items: center;
-          padding-top: 10px;
-          padding-bottom: 10px;
+          padding-top: 15px;
+          padding-bottom: 15px;
         }}
-        /* ALL-CAPS DISH ITEM STYLING */
+        /* LARGER ALL-CAPS MENU DISH ITEMS (32PX) */
         .menu-item {{
           color: #000000;
-          font-size: 22px;
+          font-size: 32px;
           font-weight: 800;
-          letter-spacing: 0.8px;
+          letter-spacing: 1px;
           line-height: 1.3;
           text-align: center;
         }}
