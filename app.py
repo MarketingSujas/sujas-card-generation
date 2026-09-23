@@ -24,66 +24,83 @@ TEMPLATE_PATH = "Mess Name cards template.pdf"
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
-def clean_and_split_items(raw_text):
-    lines = raw_text.split('\n')
-    cleaned_items = []
+def clean_and_extract_food_names(raw_ocr_text):
+    """
+    Parses table OCR text line by line:
+    - Ignores header/date rows.
+    - Excludes items with no entry, empty string, or '-' in the Qty column.
+    - Strips parentheses and splits slashes '/'.
+    """
+    lines = raw_ocr_text.split('\n')
+    extracted_dishes = []
     
-    # Common non-dish keywords, quantities, and dates to remove
-    ignore_patterns = [
-        r'PATHRAM', r'SHEET', r'PAX', r'23RD', r'SEP', r'ITEM', r'QTY',
-        r'LTR', r'KG', r'PS', r'^\d+$', r'^-+$'
-    ]
+    # Headers and date keywords to ignore completely
+    header_keywords = ["VAN OORD", "PATHRAM", "23RD", "SEP", "PAX", "ITEM", "QTY"]
     
     for line in lines:
-        line_clean = line.strip()
-        if not line_clean:
+        clean_line = line.strip()
+        if not clean_line:
             continue
             
-        # Skip header lines, date lines, or quantity-only lines
-        if any(re.search(pat, line_clean.upper()) for pat in ignore_patterns):
+        # Skip top header rows
+        if any(keyword in clean_line.upper() for keyword in header_keywords):
             continue
 
-        # Strip out parentheses and their contents, e.g. "(Boneless)" -> ""
-        text = re.sub(r'\(.*?\)', '', line_clean).strip()
+        # Detect quantity pattern at the end of the line (e.g., "6 Ltr", "8 Kg", "200 Ps", "20/40", "-")
+        # Match dish name vs quantity
+        qty_match = re.search(r'^(.*?)\s+([\d\/\.\s]*(?:Ltr|Kg|Ps|Pcs)?|-)\s*$', clean_line, re.IGNORECASE)
         
-        # Strip out quantities appended at the end of line (e.g. "6 Ltr", "8 Kg", "85 Ps")
-        text = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Liters|Kgs|Pcs)?$', '', text, flags=re.IGNORECASE).strip()
-        
-        # Remove standalone digits or special characters
-        if not text or text.isdigit() or text == "-":
-            continue
-
-        # Split items separated by / (e.g. "Aloo/subji" -> "Aloo", "Subji")
-        if '/' in text:
-            parts = [p.strip() for p in text.split('/') if p.strip()]
-            for p in parts:
-                if p.title() not in cleaned_items:
-                    cleaned_items.append(p.title())
+        if qty_match:
+            item_name = qty_match.group(1).strip()
+            qty_val = qty_match.group(2).strip()
+            
+            # Rule: Ignore items where quantity is '-' or empty
+            if not qty_val or qty_val == "-":
+                continue
         else:
-            if text.title() not in cleaned_items:
-                cleaned_items.append(text.title())
-            
-    return cleaned_items
+            # Fallback if regex didn't split quantity
+            item_name = clean_line
 
-def draw_centered_text(c, text, center_x, center_y, max_width, max_font_size=15, min_font_size=8):
-    """Resizes and vertically/horizontally centers text cleanly inside card box."""
+        # Remove parenthesis content e.g. "(Boneless)" -> ""
+        item_name = re.sub(r'\(.*?\)', '', item_name).strip()
+        
+        # Remove any residual trailing digits/units that weren't caught
+        item_name = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', item_name, flags=re.IGNORECASE).strip()
+
+        if not item_name or item_name.isdigit() or item_name == "-":
+            continue
+
+        # Split items with slashes (e.g. "Aloo/subji" -> "Aloo", "Subji")
+        if '/' in item_name:
+            parts = [p.strip().title() for p in item_name.split('/') if p.strip()]
+            for p in parts:
+                if p not in extracted_dishes:
+                    extracted_dishes.append(p)
+        else:
+            formatted_name = item_name.title()
+            if formatted_name not in extracted_dishes:
+                extracted_dishes.append(formatted_name)
+                
+    return extracted_dishes
+
+def draw_centered_text(c, text, center_x, center_y, max_width, max_font_size=16, min_font_size=8):
+    """Centers food name inside card frame without overflowing borders."""
     font_name = "Helvetica-Bold"
     font_size = max_font_size
     c.setFont(font_name, font_size)
     
-    # Scale down font size if string width exceeds card margin width
+    # Scale down font size dynamically if text is wide
     while c.stringWidth(text, font_name, font_size) > max_width and font_size > min_font_size:
         font_size -= 0.5
         c.setFont(font_name, font_size)
         
-    # Vertical offset calculation for exact font center alignment
     y_adjusted = center_y - (font_size * 0.35)
     c.drawCentredString(center_x, y_adjusted, text)
 
 def generate_overlay(page_items):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=A4)
-    c.setFillColorRGB(0.1, 0.1, 0.1) # Charcoal black text
+    c.setFillColorRGB(0.1, 0.1, 0.1)
 
     for idx, item in enumerate(page_items):
         col = idx % COLUMNS
@@ -92,13 +109,12 @@ def generate_overlay(page_items):
         x_left = col * CARD_WIDTH
         y_bottom = PAGE_HEIGHT - ((row + 1) * CARD_HEIGHT)
         
-        # True Card Center Point
+        # Exact geometric center of the card box
         center_x = x_left + (CARD_WIDTH / 2.0)
-        # Position centered vertically below the top logo header
-        center_y = y_bottom + (CARD_HEIGHT * 0.35)
+        center_y = y_bottom + (CARD_HEIGHT * 0.36)
         
-        # Horizontal safety width padding (keeps text away from side borders)
-        max_width = CARD_WIDTH - (30 * mm)
+        # Keep generous side margins to avoid touching card borders
+        max_width = CARD_WIDTH - (28 * mm)
         
         if item:
             draw_centered_text(c, str(item).strip(), center_x, center_y, max_width)
@@ -135,13 +151,12 @@ if uploaded_image:
     
     if st.button("Extract Dish Names"):
         raw_ocr = pytesseract.image_to_string(img)
-        cleaned_list = clean_and_split_items(raw_ocr)
+        cleaned_list = clean_and_extract_food_names(raw_ocr)
         st.session_state.dish_text = "\n".join(cleaned_list)
 
 st.subheader("2. Review & Edit Items (1 per line)")
 items_input = st.text_area("Dish List", value=st.session_state.dish_text, height=250)
 
-# Synchronize edited state
 st.session_state.dish_text = items_input
 
 items_list = [line.strip() for line in items_input.split("\n") if line.strip()]
