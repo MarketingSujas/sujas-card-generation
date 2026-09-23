@@ -85,7 +85,7 @@ def generate_cards_pdf(items_list, logo_b64):
           gap: 8mm;
           page-break-after: always;
         }}
-        /* FIXED DIMENSIONS - NEVER DEFORMS */
+        /* FIXED CARD DIMENSIONS */
         .card-box {{
           position: relative;
           width: 100%;
@@ -96,23 +96,23 @@ def generate_cards_pdf(items_list, logo_b64):
           background: #ffffff;
           overflow: hidden;
         }}
-        /* LOGO SIZE INCREASED BY 50% (50px -> 75px) */
+        /* ABSOLUTE OVERLAY LOGO */
         .card-logo {{
           position: absolute;
           top: 6px;
           right: 6px;
-          width: 75px;
-          height: 75px;
+          width: 70px;
+          height: 70px;
           object-fit: contain;
-          z-index: 2;
+          z-index: 20;
         }}
-        /* ABSOLUTELY POSITIONED CENTERED CONTAINER */
+        /* DEAD-CENTERED TEXT CONTAINER WITH LOGO SAFETY MARGIN */
         .text-wrapper {{
           position: absolute;
-          top: 75px;
-          bottom: 8px;
-          left: 10px;
-          right: 10px;
+          top: 10px;
+          bottom: 10px;
+          left: 14px;
+          right: 14px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -123,11 +123,14 @@ def generate_cards_pdf(items_list, logo_b64):
         .dish-name {{
           color: #000000;
           font-weight: 700;
-          line-height: 1.2;
+          line-height: 1.25;
           width: 100%;
           margin: 0;
+          /* FORCE WRAPPING BEFORE REACHING LOGO BOUNDARY */
+          padding-right: 65px; 
           word-wrap: break-word;
           overflow-wrap: break-word;
+          word-break: break-word;
           text-align: center;
         }}
         /* TEXT SHRINK TIERS */
