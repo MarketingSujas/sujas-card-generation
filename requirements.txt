@@ -1,5 +1,6 @@
 streamlit
-reportlab
-pypdf
 pillow
 pytesseract
+pypdf
+reportlab
+weasyprint
