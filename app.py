@@ -31,18 +31,47 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
+def auto_rotate_image(pil_img):
+    """Detects image orientation using EXIF and Tesseract OSD, rotating it upright."""
+    img = ImageOps.exif_transpose(pil_img)
+    
+    try:
+        osd = pytesseract.image_to_osd(img)
+        angle_match = re.search(r'Rotate:\s*(\d+)', osd)
+        if angle_match:
+            angle = int(angle_match.group(1))
+            if angle in [90, 180, 270]:
+                img = img.rotate(-angle, expand=True)
+    except Exception:
+        pass
+        
+    return img
+
 def clean_and_extract_food_names(raw_ocr_text):
+    """
+    Strictly filters OCR text to extract ONLY food names:
+    - Ignores dates (e.g. '23rd Sep'), headers, PAX counts, and QTY labels.
+    - Excludes items with empty quantity or '-' entries.
+    - Strips parenthesis note content e.g. '(Boneless)'.
+    - Splits items separated by '/' into individual dish cards.
+    """
     lines = raw_ocr_text.split('\n')
     extracted_dishes = []
     
-    header_keywords = ["VAN OORD", "PATHRAM", "23RD", "SEP", "PAX", "ITEM", "QTY", "SHEET"]
+    ignore_keywords = [
+        "VAN OORD", "PATHRAM", "PAX", "ITEM", "QTY", "SHEET",
+        "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+    ]
     
     for line in lines:
         clean_line = line.strip()
         if not clean_line:
             continue
             
-        if any(keyword in clean_line.upper() for keyword in header_keywords):
+        if any(keyword in clean_line.upper() for keyword in ignore_keywords):
+            continue
+
+        if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
             continue
 
         qty_match = re.search(r'^(.*?)\s+([\d\/\.\s]*(?:Ltr|Kg|Ps|Pcs)?|-)\s*$', clean_line, re.IGNORECASE)
@@ -50,6 +79,7 @@ def clean_and_extract_food_names(raw_ocr_text):
         if qty_match:
             item_name = qty_match.group(1).strip()
             qty_val = qty_match.group(2).strip()
+            
             if not qty_val or qty_val == "-":
                 continue
         else:
@@ -58,7 +88,7 @@ def clean_and_extract_food_names(raw_ocr_text):
         item_name = re.sub(r'\(.*?\)', '', item_name).strip()
         item_name = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', item_name, flags=re.IGNORECASE).strip()
 
-        if not item_name or item_name.isdigit() or item_name == "-":
+        if not item_name or item_name.isdigit() or item_name == "-" or len(item_name) < 2:
             continue
 
         if '/' in item_name:
@@ -145,7 +175,6 @@ def generate_html_pdf(items_list, logo_b64):
           position: absolute;
           top: 8px;
           right: 8px;
-          /* EXPANDED LOGO DIMENSIONS */
           width: 75px;
           height: 75px;
           object-fit: contain;
@@ -184,12 +213,13 @@ if not logo_b64:
 uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", type=["jpg", "jpeg", "png"])
 
 if uploaded_image:
-    img = Image.open(uploaded_image)
-    img = ImageOps.exif_transpose(img)
-    st.image(img, caption="Uploaded Image", use_container_width=True)
+    raw_img = Image.open(uploaded_image)
+    img = auto_rotate_image(raw_img)
+    
+    st.image(img, caption="Uploaded Image (Orientation Corrected)", use_container_width=True)
     
     if st.button("Extract Dish Names", type="primary"):
-        raw_ocr = pytesseract.image_to_string(img)
+        raw_ocr = pytesseract.image_to_string(img, config='--oem 3 --psm 6')
         cleaned_list = clean_and_extract_food_names(raw_ocr)
         st.session_state.dish_text = "\n".join(cleaned_list)
 
