@@ -1,38 +1,20 @@
-import io
 import math
 import re
 import os
 import streamlit as st
 from PIL import Image, ImageOps
 import pytesseract
-from pypdf import PdfReader, PdfWriter
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib.colors import HexColor
-from reportlab.lib.utils import simpleSplit
+from weasyprint import HTML
 
 st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered")
 st.title("SUJA'S KITCHEN - Name Card Generator")
 
-PAGE_WIDTH, PAGE_HEIGHT = A4
-COLUMNS, ROWS = 2, 5
-CARDS_PER_PAGE = COLUMNS * ROWS
-CARD_WIDTH = PAGE_WIDTH / COLUMNS
-CARD_HEIGHT = PAGE_HEIGHT / ROWS
-
-TEMPLATE_PATH = "Mess Name cards template.pdf"
+CARDS_PER_PAGE = 10
 
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
 def clean_and_extract_food_names(raw_ocr_text):
-    """
-    Parses OCR text:
-    - Filters out header keywords, dates, quantities, and empty/dash entries.
-    - Strips parenthesis content e.g. "(Boneless)".
-    - Splits items with slashes '/' into separate cards.
-    """
     lines = raw_ocr_text.split('\n')
     extracted_dishes = []
     
@@ -46,28 +28,22 @@ def clean_and_extract_food_names(raw_ocr_text):
         if any(keyword in clean_line.upper() for keyword in header_keywords):
             continue
 
-        # Match dish name vs quantity column (e.g. "6 Ltr", "8 Kg", "200 Ps", "-")
         qty_match = re.search(r'^(.*?)\s+([\d\/\.\s]*(?:Ltr|Kg|Ps|Pcs)?|-)\s*$', clean_line, re.IGNORECASE)
         
         if qty_match:
             item_name = qty_match.group(1).strip()
             qty_val = qty_match.group(2).strip()
-            
-            # Ignore entries with empty quantity or '-'
             if not qty_val or qty_val == "-":
                 continue
         else:
             item_name = clean_line
 
-        # Remove parentheses content e.g. "(Boneless)" -> ""
         item_name = re.sub(r'\(.*?\)', '', item_name).strip()
-        # Remove residual quantities appended at the end
         item_name = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', item_name, flags=re.IGNORECASE).strip()
 
         if not item_name or item_name.isdigit() or item_name == "-":
             continue
 
-        # Split items separated by / into individual cards
         if '/' in item_name:
             parts = [p.strip().title() for p in item_name.split('/') if p.strip()]
             for p in parts:
@@ -80,70 +56,96 @@ def clean_and_extract_food_names(raw_ocr_text):
                 
     return extracted_dishes
 
-def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=18, min_font_size=11):
-    """Draws pure black centered text with clean multi-line wrapping."""
-    font_name = "Helvetica-Bold"
-    c.setFillColor(HexColor("#000000"))
-
-    font_size = start_font_size
-    lines = simpleSplit(text, font_name, font_size, max_width)
-    
-    while len(lines) > 3 and font_size > min_font_size:
-        font_size -= 1.0
-        lines = simpleSplit(text, font_name, font_size, max_width)
-        
-    c.setFont(font_name, font_size)
-    line_height = font_size * 1.15
-    total_block_height = len(lines) * line_height
-    
-    start_y = center_y + (total_block_height / 2.0) - (font_size * 0.75)
-    
-    for i, line in enumerate(lines):
-        y_pos = start_y - (i * line_height)
-        c.drawCentredString(center_x, y_pos, line)
-
-def generate_overlay(page_items):
-    packet = io.BytesIO()
-    c = canvas.Canvas(packet, pagesize=A4)
-
-    for idx, item in enumerate(page_items):
-        col = idx % COLUMNS
-        row = idx // COLUMNS
-        
-        x_left = col * CARD_WIDTH
-        y_bottom = PAGE_HEIGHT - ((row + 1) * CARD_HEIGHT)
-        
-        # Midpoint coordinates for visual centering inside card printable frame
-        center_x = x_left + (CARD_WIDTH / 2.0)
-        center_y = y_bottom + (CARD_HEIGHT * 0.54)
-        
-        max_width = CARD_WIDTH - (36 * mm)
-        
-        if item:
-            draw_centered_text(c, str(item).strip(), center_x, center_y, max_width)
-
-    c.save()
-    packet.seek(0)
-    return packet
-
-def create_printable_pdf(template_path, items_list):
-    writer = PdfWriter()
+def generate_html_pdf(items_list):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
+    pages_html = ""
 
     for p in range(total_pages):
         page_items = items_list[p * CARDS_PER_PAGE : (p + 1) * CARDS_PER_PAGE]
-        overlay_stream = generate_overlay(page_items)
-        overlay_reader = PdfReader(overlay_stream)
         
-        template_reader = PdfReader(template_path)
-        page_copy = template_reader.pages[0]
-        page_copy.merge_page(overlay_reader.pages[0])
-        writer.add_page(page_copy)
-        
-    output_stream = io.BytesIO()
-    writer.write(output_stream)
-    output_stream.seek(0)
-    return output_stream
+        cards_html = ""
+        for item in page_items:
+            cards_html += f"""
+            <div class="card-box">
+              <p class="dish-name">{item}</p>
+            </div>
+            """
+            
+        # Pad empty cards if last page has fewer than 10 items
+        empty_slots = CARDS_PER_PAGE - len(page_items)
+        for _ in range(empty_slots):
+            cards_html += '<div class="card-box"></div>'
+
+        pages_html += f'<div class="grid-container">{cards_html}</div>'
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <style>
+        @page {{
+          size: A4;
+          margin: 0;
+        }}
+        body {{
+          margin: 0;
+          padding: 0;
+          font-family: "Helvetica", "Arial", sans-serif;
+          background-color: #ffffff;
+        }}
+        .grid-container {{
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          grid-template-rows: repeat(5, 1fr);
+          width: 210mm;
+          height: 297mm;
+          box-sizing: border-box;
+          padding: 8mm;
+          gap: 6mm;
+          page-break-after: always;
+        }}
+        .card-box {{
+          position: relative;
+          border: 2px solid #ca113b;
+          border-radius: 12px;
+          box-sizing: border-box;
+          background: #ffffff;
+          overflow: hidden;
+          
+          /* FLEXBOX CENTERING */
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+          
+          /* INNER PADDING & CONTAINMENT */
+          padding: 12px 16px;
+        }}
+        .dish-name {{
+          color: #000000;
+          font-weight: 700;
+          line-height: 1.25;
+          width: 100%;
+          margin: 0;
+          
+          /* TEXT CONTAINMENT & AUTO-WRAP */
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          
+          /* DYNAMIC FONT SCALING */
+          font-size: 20px;
+        }}
+      </style>
+    </head>
+    <body>
+      {pages_html}
+    </body>
+    </html>
+    """
+    
+    return HTML(string=html_content).write_pdf()
 
 # --- User Interface ---
 uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", type=["jpg", "jpeg", "png"])
@@ -166,15 +168,12 @@ items_list = [line.strip() for line in items_input.split("\n") if line.strip()]
 
 if items_list:
     if st.button("Generate Final PDF"):
-        if not os.path.exists(TEMPLATE_PATH):
-            st.error(f"Template file '{TEMPLATE_PATH}' not found in GitHub repository. Please upload it.")
-        else:
-            pdf_out = create_printable_pdf(TEMPLATE_PATH, items_list)
-            st.success(f"Generated {len(items_list)} cards across {math.ceil(len(items_list)/10)} page(s)!")
-            
-            st.download_button(
-                label="📥 Download Printable PDF",
-                data=pdf_out,
-                file_name="Printable_Mess_Cards.pdf",
-                mime="application/pdf"
-            )
+        pdf_bytes = generate_html_pdf(items_list)
+        st.success(f"Generated {len(items_list)} cards across {math.ceil(len(items_list)/10)} page(s)!")
+        
+        st.download_button(
+            label="📥 Download Printable PDF",
+            data=pdf_bytes,
+            file_name="Printable_Mess_Cards.pdf",
+            mime="application/pdf"
+        )
