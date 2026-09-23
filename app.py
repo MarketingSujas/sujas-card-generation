@@ -5,7 +5,7 @@ import streamlit as st
 from weasyprint import HTML
 
 st.set_page_config(page_title="Suja's Kitchen Generator", layout="centered")
-st.title("SUJA'S KITCHEN - Name Card & Menu Generator")
+st.title("SUJA'S KITCHEN - Card & Menu Generator")
 
 CARDS_PER_PAGE = 10
 
@@ -122,12 +122,12 @@ def generate_cards_pdf(items_list, logo_b64):
     """
     return HTML(string=html_content).write_pdf()
 
-def generate_menu_pdf(soups_salads, mains_desserts, logo_b64):
+def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
     logo_html = f'<img src="{logo_b64}" class="brand-logo" />' if logo_b64 else ''
+    client_title = client_name.strip().upper() if client_name else "DABUR"
     
-    # Format items into list elements and convert to ALL CAPS
-    soups_items_html = "".join([f'<div class="menu-item">{item.upper()}</div>' for item in soups_salads])
-    mains_items_html = "".join([f'<div class="menu-item">{item.upper()}</div>' for item in mains_desserts])
+    soups_items_html = "".join([f'<div class="menu-item">{item.strip().upper()}</div>' for item in soups_salads])
+    mains_items_html = "".join([f'<div class="menu-item">{item.strip().upper()}</div>' for item in mains_desserts])
 
     pages_html = ""
 
@@ -137,8 +137,8 @@ def generate_menu_pdf(soups_salads, mains_desserts, logo_b64):
         <div class="menu-page">
           <div class="header">
             {logo_html}
-            <h1 class="category-title">Soups & Salads</h1>
-            <div class="client-name">DABUR</div>
+            <div class="category-title">Soups & Salads</div>
+            <div class="client-name">{client_title}</div>
           </div>
           <div class="items-container">
             {soups_items_html}
@@ -152,8 +152,8 @@ def generate_menu_pdf(soups_salads, mains_desserts, logo_b64):
         <div class="menu-page">
           <div class="header">
             {logo_html}
-            <h1 class="category-title">Mains & Dessert</h1>
-            <div class="client-name">DABUR</div>
+            <div class="category-title">Mains & Dessert</div>
+            <div class="client-name">{client_title}</div>
           </div>
           <div class="items-container">
             {mains_items_html}
@@ -174,14 +174,14 @@ def generate_menu_pdf(soups_salads, mains_desserts, logo_b64):
         body {{
           margin: 0;
           padding: 0;
-          font-family: "Helvetica", "Arial", sans-serif;
+          font-family: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
           background-color: #ffffff;
         }}
         .menu-page {{
           width: 210mm;
           height: 297mm;
           box-sizing: border-box;
-          padding: 20mm 15mm;
+          padding: 25mm 20mm;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -192,40 +192,39 @@ def generate_menu_pdf(soups_salads, mains_desserts, logo_b64):
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-bottom: 25px;
+          margin-bottom: 35px;
         }}
         .brand-logo {{
-          width: 140px;
-          height: 140px;
+          width: 130px;
+          height: 130px;
           object-fit: contain;
-          margin-bottom: 15px;
+          margin-bottom: 20px;
         }}
         .category-title {{
-          color: #ca113b;
-          font-size: 32px;
-          font-weight: 700;
-          margin: 0 0 10px 0;
+          color: #c8102e;
+          font-size: 34px;
+          font-weight: 800;
+          margin-bottom: 6px;
         }}
         .client-name {{
-          color: #ca113b;
-          font-size: 26px;
-          font-weight: 700;
+          color: #c8102e;
+          font-size: 28px;
+          font-weight: 800;
           letter-spacing: 1px;
-          margin-bottom: 20px;
         }}
         .items-container {{
           width: 100%;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 16px;
+          gap: 20px;
         }}
         .menu-item {{
           color: #000000;
-          font-size: 22px;
-          font-weight: 700;
+          font-size: 24px;
+          font-weight: 800;
           letter-spacing: 0.5px;
-          line-height: 1.3;
+          line-height: 1.35;
         }}
       </style>
     </head>
@@ -267,15 +266,16 @@ if doc_type == "Cards":
 else:
     st.subheader("Menu Items")
     
+    client_name = st.text_input("Client / Event Name", value="DABUR")
     soups_salads_text = st.text_area("Soups & Salads (1 per line)", height=150)
-    mains_desserts_text = st.text_area("Mains & Desserts (1 per line)", height=200)
+    mains_desserts_text = st.text_area("Mains & Dessert (1 per line)", height=200)
 
     soups_salads = [line.strip() for line in soups_salads_text.split("\n") if line.strip()]
     mains_desserts = [line.strip() for line in mains_desserts_text.split("\n") if line.strip()]
 
     if soups_salads or mains_desserts:
         if st.button("Generate Menu PDF", type="primary"):
-            pdf_bytes = generate_menu_pdf(soups_salads, mains_desserts, logo_b64)
+            pdf_bytes = generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64)
             st.success("Generated Menu PDF!")
             
             st.download_button(
