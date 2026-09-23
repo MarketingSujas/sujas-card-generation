@@ -33,7 +33,7 @@ def load_logo_base64():
     return ""
 
 def extract_dishes_with_gemini(pil_img, api_key):
-    """Uses Gemini Flash to extract dish names accurately from photos."""
+    """Uses Gemini 3.6 Flash to extract dish names accurately from photos."""
     client = genai.Client(api_key=api_key)
     
     # Fix orientation from mobile camera EXIF metadata
@@ -51,9 +51,8 @@ def extract_dishes_with_gemini(pil_img, api_key):
     6. Return ONLY a plain text list with one dish name per line. No bullet points, no markdown formatting, no commentary.
     """
 
-    # Using the updated model identifier for google-genai SDK
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.6-flash",
         contents=[oriented_img, prompt]
     )
     
@@ -172,11 +171,11 @@ if uploaded_image:
     img = Image.open(uploaded_image)
     st.image(img, caption="Uploaded Image", use_container_width=True)
     
-    if st.button("✨ Extract Dish Names with Gemini AI", type="primary"):
+    if st.button("Extract Dish Names", type="primary"):
         if not gemini_api_key:
             st.error("GEMINI_API_KEY is missing! Please add GEMINI_API_KEY to your Streamlit Cloud Secrets.")
         else:
-            with st.spinner("Gemini AI is analyzing the image..."):
+            with st.spinner("Extracting dish names..."):
                 try:
                     cleaned_dishes = extract_dishes_with_gemini(img, gemini_api_key)
                     st.session_state.dish_text = cleaned_dishes
