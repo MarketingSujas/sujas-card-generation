@@ -2,4 +2,6 @@ streamlit
 pillow
 pypdf
 weasyprint
-openai
+easyocr
+torch
+torchvision
