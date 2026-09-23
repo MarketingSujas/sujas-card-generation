@@ -1,6 +1,5 @@
 streamlit
 pillow
-pytesseract
 pypdf
-reportlab
 weasyprint
+openai
