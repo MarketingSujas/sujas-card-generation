@@ -100,7 +100,7 @@ template_file = st.file_uploader("2. Upload PDF Template (Mess Name cards templa
 extracted_text = ""
 if uploaded_image:
     img = Image.open(uploaded_image)
-    st.image(img, caption="Uploaded Image", use_column_width=True)
+    st.image(img, caption="Uploaded Image", use_container_width=True)
     
     if st.button("Extract Dish Names"):
         raw_ocr = pytesseract.image_to_string(img)
