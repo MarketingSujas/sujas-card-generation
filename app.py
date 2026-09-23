@@ -135,13 +135,15 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
     if soups_salads:
         pages_html += f"""
         <div class="menu-page">
-          <div class="header">
-            {logo_html}
-            <div class="category-title">Soups & Salads</div>
-            <div class="client-name">{client_title}</div>
-          </div>
-          <div class="items-container">
-            {soups_items_html}
+          <div class="menu-border">
+            <div class="header">
+              {logo_html}
+              <div class="category-title">Soups & Salads</div>
+              <div class="client-name">{client_title}</div>
+            </div>
+            <div class="items-container">
+              {soups_items_html}
+            </div>
           </div>
         </div>
         """
@@ -150,13 +152,15 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
     if mains_desserts:
         pages_html += f"""
         <div class="menu-page">
-          <div class="header">
-            {logo_html}
-            <div class="category-title">Mains & Dessert</div>
-            <div class="client-name">{client_title}</div>
-          </div>
-          <div class="items-container">
-            {mains_items_html}
+          <div class="menu-border">
+            <div class="header">
+              {logo_html}
+              <div class="category-title">Mains & Dessert</div>
+              <div class="client-name">{client_title}</div>
+            </div>
+            <div class="items-container">
+              {mains_items_html}
+            </div>
           </div>
         </div>
         """
@@ -166,6 +170,9 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
     <html>
     <head>
       <meta charset="UTF-8" />
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
       <style>
         @page {{
           size: A4;
@@ -181,50 +188,68 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
           width: 210mm;
           height: 297mm;
           box-sizing: border-box;
-          padding: 25mm 20mm;
+          padding: 12mm;
+          page-break-after: always;
+        }}
+        /* THICK RED BORDER AROUND A4 SHEET */
+        .menu-border {{
+          width: 100%;
+          height: 100%;
+          border: 12px solid #c8102e;
+          box-sizing: border-box;
+          padding: 15mm 10mm;
           display: flex;
           flex-direction: column;
           align-items: center;
-          text-align: center;
-          page-break-after: always;
         }}
         .header {{
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-bottom: 35px;
-        }}
-        .brand-logo {{
-          width: 130px;
-          height: 130px;
-          object-fit: contain;
           margin-bottom: 20px;
         }}
+        .brand-logo {{
+          width: 120px;
+          height: 120px;
+          object-fit: contain;
+          margin-bottom: 12px;
+        }}
+        /* CALLIGRAPHY / CURSIVE HEADING IN BLACK */
         .category-title {{
-          color: #c8102e;
-          font-size: 34px;
-          font-weight: 800;
-          margin-bottom: 6px;
+          color: #000000;
+          font-family: 'Dancing Script', 'Great Vibes', 'Brush Script MT', cursive;
+          font-size: 48px;
+          font-weight: 700;
+          margin-bottom: 4px;
+          line-height: 1.1;
         }}
+        /* SMALL SUBTITLE FOR CLIENT/EVENT NAME */
         .client-name {{
-          color: #c8102e;
-          font-size: 28px;
-          font-weight: 800;
-          letter-spacing: 1px;
+          color: #000000;
+          font-size: 13px;
+          font-weight: 600;
+          letter-spacing: 2px;
+          opacity: 0.85;
         }}
+        /* EQUIDISTANT FLEX DISTRIBUTION BETWEEN HEADER AND END OF BORDER */
         .items-container {{
           width: 100%;
+          flex-grow: 1;
           display: flex;
           flex-direction: column;
+          justify-content: space-evenly;
           align-items: center;
-          gap: 20px;
+          padding-top: 10px;
+          padding-bottom: 10px;
         }}
+        /* ALL-CAPS DISH ITEM STYLING */
         .menu-item {{
           color: #000000;
-          font-size: 24px;
+          font-size: 22px;
           font-weight: 800;
-          letter-spacing: 0.5px;
-          line-height: 1.35;
+          letter-spacing: 0.8px;
+          line-height: 1.3;
+          text-align: center;
         }}
       </style>
     </head>
