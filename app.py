@@ -143,11 +143,11 @@ def generate_html_pdf(items_list, logo_b64):
         }}
         .card-logo {{
           position: absolute;
-          top: 6px;
+          top: 8px;
           right: 8px;
-          /* LOGO SIZE INCREASED TO 57px */
-          width: 57px;
-          height: 57px;
+          /* EXPANDED LOGO DIMENSIONS */
+          width: 75px;
+          height: 75px;
           object-fit: contain;
         }}
         .dish-name {{
