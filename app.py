@@ -46,13 +46,11 @@ def filter_and_clean_dishes(ocr_results):
     if not ocr_results:
         return []
 
-    # 1. Determine bounding box for the first column (x-axis coordinates)
     x_midpoints = [bbox[0][0] for bbox, text, prob in ocr_results]
     min_x = min(x_midpoints)
     max_x = max(x_midpoints)
     x_range = max_x - min_x
     
-    # Threshold to isolate the first column (~45% of total horizontal text width)
     first_col_threshold = min_x + (x_range * 0.45) if x_range > 0 else min_x + 200
 
     extracted_dishes = []
@@ -65,7 +63,6 @@ def filter_and_clean_dishes(ocr_results):
     for bbox, text, prob in ocr_results:
         x_start = bbox[0][0]
         
-        # Only process text in the first column
         if x_start > first_col_threshold:
             continue
             
@@ -73,24 +70,18 @@ def filter_and_clean_dishes(ocr_results):
         if not clean_line:
             continue
 
-        # Ignore explicit table headers or dates
         if any(keyword in clean_line.upper() for keyword in ignore_keywords):
             continue
 
         if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
             continue
 
-        # Remove parentheses and everything inside them e.g. "Chicken Khorma (ltr)" -> "Chicken Khorma"
         clean_line = re.sub(r'\(.*?\)', '', clean_line).strip()
-        
-        # Remove trailing single quantities or standalone units
         clean_line = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', clean_line, flags=re.IGNORECASE).strip()
 
-        # Reject pure numbers, dashes, or short noise strings
         if not clean_line or clean_line.isdigit() or clean_line == "-" or len(clean_line) < 2:
             continue
 
-        # Split items separated by slashes '/' into distinct entries
         if '/' in clean_line:
             parts = [p.strip().title() for p in clean_line.split('/') if p.strip()]
             for p in parts:
@@ -178,6 +169,7 @@ def generate_html_pdf(items_list, logo_b64):
           width: 75px;
           height: 75px;
           object-fit: contain;
+          z-index: 1;
         }}
         .dish-name {{
           color: #000000;
@@ -190,6 +182,10 @@ def generate_html_pdf(items_list, logo_b64):
           overflow-wrap: break-word;
           
           font-size: 20px;
+          
+          /* TOP-MOST LAYER STYLING */
+          position: relative;
+          z-index: 10;
         }}
       </style>
     </head>
@@ -221,7 +217,6 @@ if uploaded_image:
         with st.spinner("Extracting dish names from first column..."):
             reader = load_ocr_reader()
             img_np = np.array(img.convert('RGB'))
-            # Detail=1 yields bounding box metadata needed to isolate the first column
             results = reader.readtext(img_np, detail=1)
             cleaned_list = filter_and_clean_dishes(results)
             st.session_state.dish_text = "\n".join(cleaned_list)
