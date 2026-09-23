@@ -2,10 +2,8 @@ import math
 import re
 import os
 import base64
-import numpy as np
-import cv2
 import streamlit as st
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 import pytesseract
 from weasyprint import HTML
 
@@ -31,42 +29,33 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
-def remove_table_lines_and_clean(pil_img):
+def preprocess_and_clean_image(pil_img):
     """
-    1. Removes table grid lines/borders so Tesseract doesn't fail on complex menus.
-    2. Converts to high-contrast black and white.
+    Pure Pillow image preprocessing to boost contrast and eliminate grid lines
+    without relying on external C-compiled binaries like OpenCV.
     """
-    img = ImageOps.exif_transpose(pil_img)
-    img_np = np.array(img.convert('RGB'))
-    gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+    img = ImageOps.exif_transpose(pil_img).convert("L")
     
-    # Threshold image to binary
-    _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+    # Increase contrast
+    enhancer = ImageEnhance.Contrast(img)
+    img = enhancer.enhance(2.0)
     
-    # Detect and remove horizontal grid lines
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 1))
-    remove_horizontal = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+    # Thresholding to high contrast B&W
+    threshold = 180
+    img = img.point(lambda p: 255 if p > threshold else 0)
     
-    # Detect and remove vertical grid lines
-    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 25))
-    remove_vertical = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
-    
-    # Combine table lines mask and subtract from image
-    table_lines = cv2.add(remove_horizontal, remove_vertical)
-    cleaned_binary = cv2.subtract(thresh, table_lines)
-    
-    # Invert back to black text on white background
-    final_img = cv2.bitwise_not(cleaned_binary)
-    return Image.fromarray(final_img)
+    # Median filter to clean up line noise and borders
+    img = img.filter(ImageFilter.MedianFilter(size=3))
+    return img
 
 def extract_first_column_dishes(pil_img):
-    cleaned_img = remove_table_lines_and_clean(pil_img)
+    cleaned_img = preprocess_and_clean_image(pil_img)
     
-    # Run OCR on cleaned image
-    data = pytesseract.image_to_data(cleaned_img, output_type=pytesseract.Output.DICT)
+    # Run pytesseract with page segmentation mode 6 (assumes uniform block of text)
+    data = pytesseract.image_to_data(cleaned_img, config='--psm 6', output_type=pytesseract.Output.DICT)
     
     width, _ = cleaned_img.size
-    first_col_limit = width * 0.50  # Capture items in the left-hand column
+    first_col_limit = width * 0.55  # Isolates left-most dish column
     
     lines_dict = {}
     for i in range(len(data['text'])):
@@ -94,14 +83,14 @@ def extract_first_column_dishes(pil_img):
         if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
             continue
 
-        # 1. Remove text inside () completely
+        # 1. Strip text inside parentheses () completely
         clean_line = re.sub(r'\(.*?\)', '', clean_line).strip()
         clean_line = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', clean_line, flags=re.IGNORECASE).strip()
 
         if not clean_line or clean_line.isdigit() or clean_line == "-" or len(clean_line) < 2:
             continue
 
-        # 2. Split items containing slashes '/'
+        # 2. Split items with slashes '/' into separate entries
         if '/' in clean_line:
             parts = [p.strip().title() for p in clean_line.split('/') if p.strip()]
             for p in parts:
