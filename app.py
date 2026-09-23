@@ -32,10 +32,21 @@ def generate_cards_pdf(items_list, logo_b64):
         page_items = items_list[p * CARDS_PER_PAGE : (p + 1) * CARDS_PER_PAGE]
         cards_html = ""
         for item in page_items:
+            # Dynamic Font Size Tiering based on text length
+            text_len = len(item)
+            if text_len <= 18:
+                size_class = "size-large"    # 25px
+            elif text_len <= 30:
+                size_class = "size-medium"   # 20px
+            else:
+                size_class = "size-small"    # 16px
+
             cards_html += f"""
             <div class="card-box">
               {logo_html}
-              <p class="dish-name">{item}</p>
+              <div class="text-wrapper">
+                <p class="dish-name {size_class}">{item}</p>
+              </div>
             </div>
             """
             
@@ -58,7 +69,7 @@ def generate_cards_pdf(items_list, logo_b64):
         body {{
           margin: 0;
           padding: 0;
-          font-family: "Helvetica", "Arial", sans-serif;
+          font-family: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
           background-color: #ffffff;
         }}
         .grid-container {{
@@ -80,14 +91,15 @@ def generate_cards_pdf(items_list, logo_b64):
           background: #ffffff;
           overflow: hidden;
           
+          /* FLEXBOX CENTERING IN THE MIDDLE OF THE RED BOX */
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: center;
           text-align: center;
           
-          padding-top: 50px;
-          padding-bottom: 12px;
+          padding-top: 55px;
+          padding-bottom: 15px;
           padding-left: 14px;
           padding-right: 14px;
         }}
@@ -95,25 +107,40 @@ def generate_cards_pdf(items_list, logo_b64):
           position: absolute;
           top: 6px;
           right: 6px;
-          width: 60px;
-          height: 60px;
+          width: 55px;
+          height: 55px;
           object-fit: contain;
           z-index: 1;
+        }}
+        .text-wrapper {{
+          width: 100%;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          max-height: 100%;
+          overflow: hidden;
         }}
         .dish-name {{
           color: #000000;
           font-weight: 700;
-          line-height: 1.2;
+          line-height: 1.25;
           width: 100%;
           margin: 0;
           word-wrap: break-word;
           overflow-wrap: break-word;
           
-          /* INCREASED FONT SIZE TO 25PX */
-          font-size: 25px;
-          
           position: relative;
           z-index: 10;
+        }}
+        /* DYNAMIC SCALING TIERS */
+        .size-large {{
+          font-size: 25px;
+        }}
+        .size-medium {{
+          font-size: 20px;
+        }}
+        .size-small {{
+          font-size: 16px;
         }}
       </style>
     </head>
