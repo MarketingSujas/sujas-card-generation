@@ -108,7 +108,9 @@ def generate_cards_pdf(items_list, logo_b64):
           margin: 0;
           word-wrap: break-word;
           overflow-wrap: break-word;
-          font-size: 18px;
+          
+          /* INCREASED FONT SIZE BY 2 PTS (18px -> 20px) */
+          font-size: 20px;
           
           position: relative;
           z-index: 10;
