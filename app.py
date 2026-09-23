@@ -33,7 +33,7 @@ def load_logo_base64():
     return ""
 
 def extract_dishes_with_gemini(pil_img, api_key):
-    """Uses active Gemini Flash models with automatic fallback to guarantee availability."""
+    """Uses Gemini 3.6 Flash to extract dish names accurately from photos."""
     client = genai.Client(api_key=api_key)
     
     # Fix orientation from mobile camera EXIF metadata
@@ -51,22 +51,12 @@ def extract_dishes_with_gemini(pil_img, api_key):
     6. Return ONLY a plain text list with one dish name per line. No bullet points, no markdown formatting, no commentary.
     """
 
-    # Primary supported model identifiers
-    fallback_models = ["gemini-2.5-flash", "gemini-2.0-flash"]
-    last_error = None
-
-    for model_name in fallback_models:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=[oriented_img, prompt]
-            )
-            return response.text.strip()
-        except Exception as e:
-            last_error = e
-            continue
-
-    raise last_error
+    response = client.models.generate_content(
+        model="gemini-3.6-flash",
+        contents=[oriented_img, prompt]
+    )
+    
+    return response.text.strip()
 
 def generate_html_pdf(items_list, logo_b64):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
