@@ -18,8 +18,8 @@ if "dish_text" not in st.session_state:
 
 @st.cache_resource
 def load_ocr_reader():
-    """Loads the free EasyOCR deep learning model into memory once."""
-    return easyocr.Reader(['en'], gpu=False)
+    """Loads lightweight EasyOCR without GPU or heavy memory footprint."""
+    return easyocr.Reader(['en'], gpu=False, download_enabled=True)
 
 def load_logo_base64():
     possible_filenames = [
@@ -36,13 +36,6 @@ def load_logo_base64():
     return ""
 
 def filter_and_clean_dishes(ocr_results):
-    """
-    Custom extraction pipeline:
-    1. Keeps only items located in the left-most column (x-position filter).
-    2. Strips out all parenthetical content like (ltr) or (Boneless).
-    3. Discards dates, pure numbers, and headers.
-    4. Splits items separated by slashes '/' into individual entries.
-    """
     if not ocr_results:
         return []
 
@@ -54,7 +47,6 @@ def filter_and_clean_dishes(ocr_results):
     first_col_threshold = min_x + (x_range * 0.45) if x_range > 0 else min_x + 200
 
     extracted_dishes = []
-    
     ignore_keywords = [
         "ITEM", "QTY", "PAX", "SHEET", "OFFICE", "JAFZA", "DATE", "VAN OORD", "PATHRAM",
         "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
@@ -62,26 +54,24 @@ def filter_and_clean_dishes(ocr_results):
 
     for bbox, text, prob in ocr_results:
         x_start = bbox[0][0]
-        
         if x_start > first_col_threshold:
             continue
             
         clean_line = text.strip()
-        if not clean_line:
-            continue
-
-        if any(keyword in clean_line.upper() for keyword in ignore_keywords):
+        if not clean_line or any(keyword in clean_line.upper() for keyword in ignore_keywords):
             continue
 
         if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
             continue
 
+        # Strip parentheses content
         clean_line = re.sub(r'\(.*?\)', '', clean_line).strip()
         clean_line = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', clean_line, flags=re.IGNORECASE).strip()
 
         if not clean_line or clean_line.isdigit() or clean_line == "-" or len(clean_line) < 2:
             continue
 
+        # Split entries with slashes
         if '/' in clean_line:
             parts = [p.strip().title() for p in clean_line.split('/') if p.strip()]
             for p in parts:
@@ -97,12 +87,10 @@ def filter_and_clean_dishes(ocr_results):
 def generate_html_pdf(items_list, logo_b64):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
     pages_html = ""
-    
     logo_html = f'<img src="{logo_b64}" class="card-logo" />' if logo_b64 else ''
 
     for p in range(total_pages):
         page_items = items_list[p * CARDS_PER_PAGE : (p + 1) * CARDS_PER_PAGE]
-        
         cards_html = ""
         for item in page_items:
             cards_html += f"""
@@ -153,13 +141,11 @@ def generate_html_pdf(items_list, logo_b64):
           background: #ffffff;
           overflow: hidden;
           
-          /* FLEXBOX CENTERING */
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: center;
           text-align: center;
-          
           padding: 16px 20px;
         }}
         .card-logo {{
@@ -177,10 +163,8 @@ def generate_html_pdf(items_list, logo_b64):
           line-height: 1.25;
           width: 100%;
           margin: 0;
-          
           word-wrap: break-word;
           overflow-wrap: break-word;
-          
           font-size: 20px;
           
           /* TOP-MOST LAYER STYLING */
@@ -194,7 +178,6 @@ def generate_html_pdf(items_list, logo_b64):
     </body>
     </html>
     """
-    
     return HTML(string=html_content).write_pdf()
 
 # --- User Interface ---
@@ -214,12 +197,15 @@ if uploaded_image:
     st.image(img, caption="Uploaded Image", use_container_width=True)
     
     if st.button("Extract Dish Names", type="primary"):
-        with st.spinner("Extracting dish names from first column..."):
-            reader = load_ocr_reader()
-            img_np = np.array(img.convert('RGB'))
-            results = reader.readtext(img_np, detail=1)
-            cleaned_list = filter_and_clean_dishes(results)
-            st.session_state.dish_text = "\n".join(cleaned_list)
+        with st.spinner("Extracting dish names..."):
+            try:
+                reader = load_ocr_reader()
+                img_np = np.array(img.convert('RGB'))
+                results = reader.readtext(img_np, detail=1)
+                cleaned_list = filter_and_clean_dishes(results)
+                st.session_state.dish_text = "\n".join(cleaned_list)
+            except Exception as e:
+                st.error(f"Error processing image: {str(e)}")
 
 st.subheader("2. Review & Edit Items (1 per line)")
 items_input = st.text_area("Dish List", value=st.session_state.dish_text, height=250)
