@@ -1,10 +1,11 @@
 import math
 import os
 import base64
+import io
 import streamlit as st
 from PIL import Image, ImageOps
 from weasyprint import HTML
-from google import genai
+from openai import OpenAI
 
 st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered")
 st.title("SUJA'S KITCHEN - Name Card Generator")
@@ -14,8 +15,8 @@ CARDS_PER_PAGE = 10
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
-# Securely retrieve Gemini API key from Streamlit Cloud Secrets
-gemini_api_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+# Securely retrieve OpenAI API key from Streamlit Cloud Secrets
+openai_api_key = st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
 
 def load_logo_base64():
     """Locates the logo in the repo and converts it to a base64 data URL."""
@@ -32,13 +33,18 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
-def extract_dishes_with_gemini(pil_img, api_key):
-    """Uses Gemini 3.6 Flash to extract dish names accurately from photos."""
-    client = genai.Client(api_key=api_key)
-    
-    # Fix orientation from mobile camera EXIF metadata
+def pil_to_base64_jpeg(pil_img):
+    """Converts a PIL image to a base64 encoded JPEG string."""
     oriented_img = ImageOps.exif_transpose(pil_img)
-    
+    buffer = io.BytesIO()
+    oriented_img.convert("RGB").save(buffer, format="JPEG")
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+def extract_dishes_with_openai(pil_img, api_key):
+    """Uses OpenAI Vision (gpt-4o-mini) to extract dish names accurately."""
+    client = OpenAI(api_key=api_key)
+    base64_image = pil_to_base64_jpeg(pil_img)
+
     prompt = """
     You are an assistant for a catering company. Analyze this photo of a menu or food list table.
     
@@ -51,12 +57,26 @@ def extract_dishes_with_gemini(pil_img, api_key):
     6. Return ONLY a plain text list with one dish name per line. No bullet points, no markdown formatting, no commentary.
     """
 
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=[oriented_img, prompt]
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        },
+                    },
+                ],
+            }
+        ],
+        max_tokens=600,
     )
     
-    return response.text.strip()
+    return response.choices[0].message.content.strip()
 
 def generate_html_pdf(items_list, logo_b64):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
@@ -172,16 +192,16 @@ if uploaded_image:
     st.image(img, caption="Uploaded Image", use_container_width=True)
     
     if st.button("Extract Dish Names", type="primary"):
-        if not gemini_api_key:
-            st.error("GEMINI_API_KEY is missing! Please add GEMINI_API_KEY to your Streamlit Cloud Secrets.")
+        if not openai_api_key:
+            st.error("OPENAI_API_KEY is missing! Please add OPENAI_API_KEY to your Streamlit Cloud Secrets.")
         else:
-            with st.spinner("Extracting dish names..."):
+            with st.spinner("Extracting dish names with OpenAI..."):
                 try:
-                    cleaned_dishes = extract_dishes_with_gemini(img, gemini_api_key)
+                    cleaned_dishes = extract_dishes_with_openai(img, openai_api_key)
                     st.session_state.dish_text = cleaned_dishes
                     st.success("Extraction complete!")
                 except Exception as e:
-                    st.error(f"Gemini Extraction Error: {str(e)}")
+                    st.error(f"Extraction Error: {str(e)}")
 
 st.subheader("2. Review & Edit Items (1 per line)")
 items_input = st.text_area("Dish List", value=st.session_state.dish_text, height=250)
