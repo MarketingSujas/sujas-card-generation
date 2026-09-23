@@ -12,7 +12,6 @@ st.title("SUJA'S KITCHEN - Name Card Generator")
 
 CARDS_PER_PAGE = 10
 
-# Allow uploading or referencing logo file dynamically
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
@@ -144,10 +143,11 @@ def generate_html_pdf(items_list, logo_b64):
         }}
         .card-logo {{
           position: absolute;
-          top: 10px;
-          right: 12px;
-          width: 38px;
-          height: 38px;
+          top: 8px;
+          right: 10px;
+          /* INCREASED LOGO SIZE BY 30% (FROM 38px TO 50px) */
+          width: 50px;
+          height: 50px;
           object-fit: contain;
         }}
         .dish-name {{
@@ -175,7 +175,6 @@ def generate_html_pdf(items_list, logo_b64):
 # --- User Interface ---
 logo_b64 = load_logo_base64()
 
-# Optional logo upload directly in UI if file is missing in GitHub repo
 if not logo_b64:
     logo_file = st.file_uploader("Upload Brand Logo (PNG/JPEG)", type=["png", "jpg", "jpeg"])
     if logo_file:
