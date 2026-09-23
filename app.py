@@ -96,19 +96,20 @@ def generate_cards_pdf(items_list, logo_b64):
           background: #ffffff;
           overflow: hidden;
         }}
+        /* LOGO SIZE INCREASED BY 50% (50px -> 75px) */
         .card-logo {{
           position: absolute;
           top: 6px;
           right: 6px;
-          width: 50px;
-          height: 50px;
+          width: 75px;
+          height: 75px;
           object-fit: contain;
           z-index: 2;
         }}
         /* ABSOLUTELY POSITIONED CENTERED CONTAINER */
         .text-wrapper {{
           position: absolute;
-          top: 52px;
+          top: 75px;
           bottom: 8px;
           left: 10px;
           right: 10px;
