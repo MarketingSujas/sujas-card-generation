@@ -3,5 +3,4 @@ libpangoft2-1.0-0
 libgobject-2.0-0
 libglib2.0-0
 libfontconfig1
-libgl1-mesa-glx
 tesseract-ocr
