@@ -123,11 +123,43 @@ def generate_cards_pdf(items_list, logo_b64):
     return HTML(string=html_content).write_pdf()
 
 def generate_menu_pdf(soups_salads, mains_desserts, logo_b64):
-    """Placeholder renderer for Menu Layout (ready for second design rules)."""
-    logo_html = f'<img src="{logo_b64}" class="menu-logo" />' if logo_b64 else ''
+    logo_html = f'<img src="{logo_b64}" class="brand-logo" />' if logo_b64 else ''
     
-    soups_html = "".join([f"<li>{item}</li>" for item in soups_salads])
-    mains_html = "".join([f"<li>{item}</li>" for item in mains_desserts])
+    # Format items into list elements and convert to ALL CAPS
+    soups_items_html = "".join([f'<div class="menu-item">{item.upper()}</div>' for item in soups_salads])
+    mains_items_html = "".join([f'<div class="menu-item">{item.upper()}</div>' for item in mains_desserts])
+
+    pages_html = ""
+
+    # Page 1: Soups & Salads
+    if soups_salads:
+        pages_html += f"""
+        <div class="menu-page">
+          <div class="header">
+            {logo_html}
+            <h1 class="category-title">Soups & Salads</h1>
+            <div class="client-name">DABUR</div>
+          </div>
+          <div class="items-container">
+            {soups_items_html}
+          </div>
+        </div>
+        """
+
+    # Page 2: Mains & Dessert
+    if mains_desserts:
+        pages_html += f"""
+        <div class="menu-page">
+          <div class="header">
+            {logo_html}
+            <h1 class="category-title">Mains & Dessert</h1>
+            <div class="client-name">DABUR</div>
+          </div>
+          <div class="items-container">
+            {mains_items_html}
+          </div>
+        </div>
+        """
 
     html_content = f"""
     <!DOCTYPE html>
@@ -141,49 +173,64 @@ def generate_menu_pdf(soups_salads, mains_desserts, logo_b64):
         }}
         body {{
           margin: 0;
-          padding: 15mm;
-          font-family: "Helvetica", "Arial", sans-serif;
-          color: #000000;
-        }}
-        .menu-header {{
-          text-align: center;
-          position: relative;
-          margin-bottom: 30px;
-        }}
-        .menu-logo {{
-          width: 90px;
-          height: 90px;
-          object-fit: contain;
-        }}
-        .section-title {{
-          color: #ca113b;
-          font-size: 22px;
-          border-bottom: 2px solid #ca113b;
-          padding-bottom: 5px;
-          margin-top: 25px;
-        }}
-        ul {{
-          list-style-type: none;
           padding: 0;
+          font-family: "Helvetica", "Arial", sans-serif;
+          background-color: #ffffff;
         }}
-        li {{
-          font-size: 16px;
-          font-weight: bold;
-          margin-bottom: 10px;
+        .menu-page {{
+          width: 210mm;
+          height: 297mm;
+          box-sizing: border-box;
+          padding: 20mm 15mm;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          page-break-after: always;
+        }}
+        .header {{
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin-bottom: 25px;
+        }}
+        .brand-logo {{
+          width: 140px;
+          height: 140px;
+          object-fit: contain;
+          margin-bottom: 15px;
+        }}
+        .category-title {{
+          color: #ca113b;
+          font-size: 32px;
+          font-weight: 700;
+          margin: 0 0 10px 0;
+        }}
+        .client-name {{
+          color: #ca113b;
+          font-size: 26px;
+          font-weight: 700;
+          letter-spacing: 1px;
+          margin-bottom: 20px;
+        }}
+        .items-container {{
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+        }}
+        .menu-item {{
+          color: #000000;
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          line-height: 1.3;
         }}
       </style>
     </head>
     <body>
-      <div class="menu-header">
-        {logo_html}
-        <h1 style="color: #ca113b; margin-top: 10px;">TODAY'S MENU</h1>
-      </div>
-
-      <div class="section-title">Soups & Salads</div>
-      <ul>{soups_html}</ul>
-
-      <div class="section-title">Mains & Desserts</div>
-      <ul>{mains_html}</ul>
+      {pages_html}
     </body>
     </html>
     """
@@ -198,7 +245,6 @@ if not logo_b64:
         encoded_logo = base64.b64encode(logo_file.read()).decode("utf-8")
         logo_b64 = f"data:{logo_file.type};base64,{encoded_logo}"
 
-# Binary Mode Selector
 doc_type = st.radio("Select Document Type", ["Cards", "Menus"], horizontal=True)
 
 if doc_type == "Cards":
