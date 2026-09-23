@@ -69,24 +69,26 @@ def clean_and_extract_food_names(raw_ocr_text):
                 
     return extracted_dishes
 
-def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=15, min_font_size=9):
+def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=18, min_font_size=11):
+    """Draws pure black text matching the exact line wrapping and vertical centering of sample.pdf."""
     font_name = "Helvetica-Bold"
-    c.setFont(font_name, start_font_size)
     c.setFillColor(HexColor("#000000"))  # Pure Black
 
-    # Split text into multiple lines if longer than max_width
-    lines = simpleSplit(text, font_name, start_font_size, max_width)
-    
+    # Try split at full size
     font_size = start_font_size
-    while len(lines) > 2 and font_size > min_font_size:
-        font_size -= 0.5
+    lines = simpleSplit(text, font_name, font_size, max_width)
+    
+    # Scale down slightly only if it wraps into more than 3 lines
+    while len(lines) > 3 and font_size > min_font_size:
+        font_size -= 1.0
         lines = simpleSplit(text, font_name, font_size, max_width)
         
     c.setFont(font_name, font_size)
-    line_height = font_size * 1.2
-    total_height = len(lines) * line_height
+    line_height = font_size * 1.15
+    total_text_height = len(lines) * line_height
     
-    start_y = center_y + (total_height / 2.0) - (font_size * 0.7)
+    # Calculate starting Y to center the whole block vertically in the box
+    start_y = center_y + (total_text_height / 2.0) - (font_size * 0.75)
     
     for i, line in enumerate(lines):
         y_pos = start_y - (i * line_height)
@@ -103,12 +105,13 @@ def generate_overlay(page_items):
         x_left = col * CARD_WIDTH
         y_bottom = PAGE_HEIGHT - ((row + 1) * CARD_HEIGHT)
         
-        # Center of each card frame
-        center_x = x_left + (CARD_WIDTH / 2.0)
-        center_y = y_bottom + (CARD_HEIGHT * 0.38)
+        # Center horizontally in the available card space
+        center_x = x_left + (CARD_WIDTH * 0.48)
+        # Center vertically inside the card boundary below top header
+        center_y = y_bottom + (CARD_HEIGHT * 0.46)
         
-        # Inner printable boundary (prevents overflow off card borders)
-        max_width = CARD_WIDTH - (40 * mm)
+        # Width boundary matching sample padding (prevents overflow off red borders)
+        max_width = CARD_WIDTH - (32 * mm)
         
         if item:
             draw_centered_text(c, str(item).strip(), center_x, center_y, max_width)
