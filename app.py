@@ -1,11 +1,10 @@
 import math
-import re
 import os
 import base64
 import streamlit as st
 from PIL import Image, ImageOps
 from weasyprint import HTML
-from openai import OpenAI
+from google import genai
 
 st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered")
 st.title("SUJA'S KITCHEN - Name Card Generator")
@@ -15,16 +14,11 @@ CARDS_PER_PAGE = 10
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
-# --- Sidebar API Key Input ---
-st.sidebar.header("🔑 AI Settings")
-openai_api_key = st.sidebar.text_input(
-    "OpenAI API Key",
-    type="password",
-    value=st.secrets.get("OPENAI_API_KEY", ""),
-    help="Enter your OpenAI key starting with 'sk-'. You can also store it in Streamlit Secrets."
-)
+# Securely retrieve Gemini API key from Streamlit Cloud Secrets
+gemini_api_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
 
 def load_logo_base64():
+    """Locates the logo in the repo and converts it to a base64 data URL."""
     possible_filenames = [
         "logo.png", "logo.jpeg", "logo.jpg",
         "Suja's Transparent Logo.jpeg", "Suja's Transparent Logo.png",
@@ -38,55 +32,31 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
-def pil_to_base64(pil_img):
-    """Converts PIL image to base64 JPEG for OpenAI Vision API."""
-    img = ImageOps.exif_transpose(pil_img)
-    buffered = base64.b64encode(st.session_state.get("uploaded_bytes", b""))
+def extract_dishes_with_gemini(pil_img, api_key):
+    """Uses Gemini 1.5 Flash to extract dish names accurately from photos."""
+    client = genai.Client(api_key=api_key)
     
-    # Fallback encoding if bytes not in session state
-    import io
-    buffer = io.BytesIO()
-    img.save(buffer, format="JPEG")
-    return base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-def extract_dishes_with_ai(pil_img, api_key):
-    """Uses GPT-4o-mini Vision to extract clean dish names from the photo."""
-    client = OpenAI(api_key=api_key)
-    base64_image = pil_to_base64(pil_img)
-
+    # Fix orientation from mobile camera EXIF metadata
+    oriented_img = ImageOps.exif_transpose(pil_img)
+    
     prompt = """
-    You are an assistant for a catering company. Analyze this photo of a menu/food list table.
+    You are an assistant for a catering company. Analyze this photo of a menu or food list table.
     
     CRITICAL INSTRUCTIONS:
     1. Extract ONLY the food dish names.
-    2. Completely IGNORE quantities (e.g., '6 ltr', '10 ltr', '12 kg', '90'), headers ('Item', 'Office', 'Jafza'), dates, and order numbers.
+    2. Completely IGNORE quantities (e.g., '6 ltr', '10 ltr', '12 kg', '90', '55'), table headers ('Item', 'Office', 'Jafza'), dates, and order numbers.
     3. Remove unit descriptors from dish names, like '(ltr)', '(kg)', or '(Boneless)'. E.g., 'Chicken khorma (ltr)' becomes 'Chicken Khorma'.
     4. If a line contains items separated by slashes '/' (e.g., 'Letuce/Tomato/Cucumber/Radish'), SPLIT them into separate dish names, one per line.
     5. Convert all dish names to Proper Title Case (e.g., 'Papdi Chat', 'Butter Paneer').
     6. Return ONLY a plain text list with one dish name per line. No bullet points, no markdown formatting, no commentary.
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        },
-                    },
-                ],
-            }
-        ],
-        max_tokens=500,
+    response = client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=[oriented_img, prompt]
     )
     
-    result_text = response.choices[0].message.content.strip()
-    return result_text
+    return response.text.strip()
 
 def generate_html_pdf(items_list, logo_b64):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
@@ -201,17 +171,17 @@ if uploaded_image:
     img = Image.open(uploaded_image)
     st.image(img, caption="Uploaded Image", use_container_width=True)
     
-    if st.button("✨ Extract Dish Names with AI", type="primary"):
-        if not openai_api_key:
-            st.error("Please enter an OpenAI API Key in the sidebar on the left!")
+    if st.button("✨ Extract Dish Names with Gemini AI", type="primary"):
+        if not gemini_api_key:
+            st.error("GEMINI_API_KEY is missing! Please add GEMINI_API_KEY to your Streamlit Cloud Secrets.")
         else:
-            with st.spinner("AI is analyzing the photo and extracting dishes..."):
+            with st.spinner("Gemini AI is analyzing the image..."):
                 try:
-                    cleaned_dishes = extract_dishes_with_ai(img, openai_api_key)
+                    cleaned_dishes = extract_dishes_with_gemini(img, gemini_api_key)
                     st.session_state.dish_text = cleaned_dishes
                     st.success("Extraction complete!")
                 except Exception as e:
-                    st.error(f"AI Extraction Error: {str(e)}")
+                    st.error(f"Gemini Extraction Error: {str(e)}")
 
 st.subheader("2. Review & Edit Items (1 per line)")
 items_input = st.text_area("Dish List", value=st.session_state.dish_text, height=250)
