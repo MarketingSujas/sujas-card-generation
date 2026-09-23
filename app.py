@@ -21,6 +21,10 @@ CARD_HEIGHT = PAGE_HEIGHT / ROWS
 
 TEMPLATE_PATH = "Mess Name cards template.pdf"
 
+# Initialize session state for extracted text if not present
+if "dish_text" not in st.session_state:
+    st.session_state.dish_text = ""
+
 def clean_and_split_items(raw_text):
     lines = raw_text.split('\n')
     cleaned_items = []
@@ -99,7 +103,6 @@ def create_printable_pdf(template_path, items_list):
 # --- App UI ---
 uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", type=["jpg", "jpeg", "png"])
 
-extracted_text = ""
 if uploaded_image:
     img = Image.open(uploaded_image)
     st.image(img, caption="Uploaded Image", use_container_width=True)
@@ -107,23 +110,26 @@ if uploaded_image:
     if st.button("Extract Dish Names"):
         raw_ocr = pytesseract.image_to_string(img)
         cleaned_list = clean_and_split_items(raw_ocr)
-        extracted_text = "\n".join(cleaned_list)
+        st.session_state.dish_text = "\n".join(cleaned_list)
 
 st.subheader("2. Review & Edit Items (1 per line)")
-items_input = st.text_area("Dish List", value=extracted_text, height=250)
+items_input = st.text_area("Dish List", value=st.session_state.dish_text, height=250)
+
+# Update state if user manually edits text
+st.session_state.dish_text = items_input
 
 items_list = [line.strip() for line in items_input.split("\n") if line.strip()]
 
 if items_list:
     if st.button("Generate Final PDF"):
         if not os.path.exists(TEMPLATE_PATH):
-            st.error(f"Template file '{TEMPLATE_PATH}' not found in GitHub repository.")
+            st.error(f"Template file '{TEMPLATE_PATH}' not found in GitHub repository. Please upload it to GitHub.")
         else:
             pdf_out = create_printable_pdf(TEMPLATE_PATH, items_list)
             st.success(f"Generated {len(items_list)} cards across {math.ceil(len(items_list)/10)} page(s)!")
             
             st.download_button(
-                label="Download Printable PDF",
+                label="📥 Download Printable PDF",
                 data=pdf_out,
                 file_name="Printable_Mess_Cards.pdf",
                 mime="application/pdf"
