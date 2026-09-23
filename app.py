@@ -103,14 +103,14 @@ def generate_cards_pdf(items_list, logo_b64):
         .dish-name {{
           color: #000000;
           font-weight: 700;
-          line-height: 1.25;
+          line-height: 1.2;
           width: 100%;
           margin: 0;
           word-wrap: break-word;
           overflow-wrap: break-word;
           
-          /* INCREASED FONT SIZE BY 2 PTS (18px -> 20px) */
-          font-size: 20px;
+          /* INCREASED FONT SIZE TO 25PX */
+          font-size: 25px;
           
           position: relative;
           z-index: 10;
