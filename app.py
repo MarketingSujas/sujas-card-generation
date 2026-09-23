@@ -2,6 +2,8 @@ import math
 import re
 import os
 import base64
+import numpy as np
+import cv2
 import streamlit as st
 from PIL import Image, ImageOps
 import pytesseract
@@ -29,37 +31,51 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
-def filter_and_clean_dishes(pil_img):
+def remove_table_lines_and_clean(pil_img):
     """
-    Lightweight extraction:
-    1. Isolates text from the primary left column using horizontal coordinates.
-    2. Completely strips out parenthetical notes like (ltr) or (Boneless).
-    3. Splits items separated by slashes '/' into separate dish entries.
-    4. Discards headers, dates, and pure numbers.
+    1. Removes table grid lines/borders so Tesseract doesn't fail on complex menus.
+    2. Converts to high-contrast black and white.
     """
     img = ImageOps.exif_transpose(pil_img)
+    img_np = np.array(img.convert('RGB'))
+    gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
     
-    # Get word level bounding box metadata to isolate first column
-    data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+    # Threshold image to binary
+    _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
     
-    n_boxes = len(data['text'])
-    valid_words = []
+    # Detect and remove horizontal grid lines
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 1))
+    remove_horizontal = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
     
-    # Find image horizontal dimensions to isolate primary left column
-    width, height = img.size
-    first_col_limit = width * 0.55  # Capture items in the left-hand column
+    # Detect and remove vertical grid lines
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 25))
+    remove_vertical = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
     
-    for i in range(n_boxes):
+    # Combine table lines mask and subtract from image
+    table_lines = cv2.add(remove_horizontal, remove_vertical)
+    cleaned_binary = cv2.subtract(thresh, table_lines)
+    
+    # Invert back to black text on white background
+    final_img = cv2.bitwise_not(cleaned_binary)
+    return Image.fromarray(final_img)
+
+def extract_first_column_dishes(pil_img):
+    cleaned_img = remove_table_lines_and_clean(pil_img)
+    
+    # Run OCR on cleaned image
+    data = pytesseract.image_to_data(cleaned_img, output_type=pytesseract.Output.DICT)
+    
+    width, _ = cleaned_img.size
+    first_col_limit = width * 0.50  # Capture items in the left-hand column
+    
+    lines_dict = {}
+    for i in range(len(data['text'])):
         text = data['text'][i].strip()
         left = data['left'][i]
+        line_num = data['line_num'][i]
         
         if text and left < first_col_limit:
-            valid_words.append((data['line_num'][i], text))
-
-    # Group words back into lines
-    lines_dict = {}
-    for line_num, word in valid_words:
-        lines_dict.setdefault(line_num, []).append(word)
+            lines_dict.setdefault(line_num, []).append(text)
 
     extracted_dishes = []
     ignore_keywords = [
@@ -78,14 +94,14 @@ def filter_and_clean_dishes(pil_img):
         if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
             continue
 
-        # Strip parentheses and internal text e.g., "(ltr)" or "(Boneless)"
+        # 1. Remove text inside () completely
         clean_line = re.sub(r'\(.*?\)', '', clean_line).strip()
         clean_line = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', clean_line, flags=re.IGNORECASE).strip()
 
         if not clean_line or clean_line.isdigit() or clean_line == "-" or len(clean_line) < 2:
             continue
 
-        # Split slash items into individual entries
+        # 2. Split items containing slashes '/'
         if '/' in clean_line:
             parts = [p.strip().title() for p in clean_line.split('/') if p.strip()]
             for p in parts:
@@ -212,7 +228,7 @@ if uploaded_image:
     if st.button("Extract Dish Names", type="primary"):
         with st.spinner("Extracting dish names..."):
             try:
-                cleaned_list = filter_and_clean_dishes(img)
+                cleaned_list = extract_first_column_dishes(img)
                 st.session_state.dish_text = "\n".join(cleaned_list)
             except Exception as e:
                 st.error(f"Error processing image: {str(e)}")
