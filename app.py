@@ -1,6 +1,7 @@
 import io
 import math
 import re
+import os
 import streamlit as st
 from PIL import Image
 import pytesseract
@@ -17,6 +18,8 @@ COLUMNS, ROWS = 2, 5
 CARDS_PER_PAGE = COLUMNS * ROWS
 CARD_WIDTH = PAGE_WIDTH / COLUMNS
 CARD_HEIGHT = PAGE_HEIGHT / ROWS
+
+TEMPLATE_PATH = "Mess Name cards template.pdf"
 
 def clean_and_split_items(raw_text):
     lines = raw_text.split('\n')
@@ -74,7 +77,7 @@ def generate_overlay(page_items):
     packet.seek(0)
     return packet
 
-def create_printable_pdf(template_file, items_list):
+def create_printable_pdf(template_path, items_list):
     writer = PdfWriter()
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
 
@@ -83,7 +86,7 @@ def create_printable_pdf(template_file, items_list):
         overlay_stream = generate_overlay(page_items)
         overlay_reader = PdfReader(overlay_stream)
         
-        template_reader = PdfReader(template_file)
+        template_reader = PdfReader(template_path)
         page_copy = template_reader.pages[0]
         page_copy.merge_page(overlay_reader.pages[0])
         writer.add_page(page_copy)
@@ -95,7 +98,6 @@ def create_printable_pdf(template_file, items_list):
 
 # --- App UI ---
 uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", type=["jpg", "jpeg", "png"])
-template_file = st.file_uploader("2. Upload PDF Template (Mess Name cards template.pdf)", type=["pdf"])
 
 extracted_text = ""
 if uploaded_image:
@@ -107,19 +109,22 @@ if uploaded_image:
         cleaned_list = clean_and_split_items(raw_ocr)
         extracted_text = "\n".join(cleaned_list)
 
-st.subheader("3. Review & Edit Items (1 per line)")
+st.subheader("2. Review & Edit Items (1 per line)")
 items_input = st.text_area("Dish List", value=extracted_text, height=250)
 
 items_list = [line.strip() for line in items_input.split("\n") if line.strip()]
 
-if template_file and items_list:
+if items_list:
     if st.button("Generate Final PDF"):
-        pdf_out = create_printable_pdf(template_file, items_list)
-        st.success(f"Generated {len(items_list)} cards across {math.ceil(len(items_list)/10)} page(s)!")
-        
-        st.download_button(
-            label="Download Printable PDF",
-            data=pdf_out,
-            file_name="Printable_Mess_Cards.pdf",
-            mime="application/pdf"
-        )
+        if not os.path.exists(TEMPLATE_PATH):
+            st.error(f"Template file '{TEMPLATE_PATH}' not found in GitHub repository.")
+        else:
+            pdf_out = create_printable_pdf(TEMPLATE_PATH, items_list)
+            st.success(f"Generated {len(items_list)} cards across {math.ceil(len(items_list)/10)} page(s)!")
+            
+            st.download_button(
+                label="Download Printable PDF",
+                data=pdf_out,
+                file_name="Printable_Mess_Cards.pdf",
+                mime="application/pdf"
+            )
