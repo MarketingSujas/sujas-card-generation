@@ -11,16 +11,25 @@ st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered"
 st.title("SUJA'S KITCHEN - Name Card Generator")
 
 CARDS_PER_PAGE = 10
-LOGO_PATH = "logo.png"  # Make sure this matches your uploaded logo filename on GitHub
 
+# Allow uploading or referencing logo file dynamically
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
-def get_image_base64(path):
-    if os.path.exists(path):
-        with open(path, "rb") as image_file:
-            encoded = base64.b64encode(image_file.read()).decode()
-            return f"data:image/png;base64,{encoded}"
+def load_logo_base64():
+    """Searches for common logo filenames in repo and converts to Base64 data URL."""
+    possible_filenames = [
+        "logo.png", "logo.jpeg", "logo.jpg",
+        "Suja's Transparent Logo.jpeg", "Suja's Transparent Logo.png",
+        "Suja's Transparent Logo.jpg"
+    ]
+    
+    for filename in possible_filenames:
+        if os.path.exists(filename):
+            with open(filename, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("utf-8")
+                mime = "image/png" if filename.endswith(".png") else "image/jpeg"
+                return f"data:{mime};base64,{encoded}"
     return ""
 
 def clean_and_extract_food_names(raw_ocr_text):
@@ -65,12 +74,11 @@ def clean_and_extract_food_names(raw_ocr_text):
                 
     return extracted_dishes
 
-def generate_html_pdf(items_list):
+def generate_html_pdf(items_list, logo_b64):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
     pages_html = ""
-    logo_base64 = get_image_base64(LOGO_PATH)
     
-    logo_html = f'<img src="{logo_base64}" class="card-logo" />' if logo_base64 else ''
+    logo_html = f'<img src="{logo_b64}" class="card-logo" />' if logo_b64 else ''
 
     for p in range(total_pages):
         page_items = items_list[p * CARDS_PER_PAGE : (p + 1) * CARDS_PER_PAGE]
@@ -114,13 +122,11 @@ def generate_html_pdf(items_list):
           height: 297mm;
           box-sizing: border-box;
           padding: 8mm;
-          /* INCREASED CELL SPACING BY 5% (FROM 6mm TO 8mm) */
           gap: 8mm;
           page-break-after: always;
         }}
         .card-box {{
           position: relative;
-          /* INCREASED BORDER THICKNESS (FROM 2px TO 3.5px) */
           border: 3.5px solid #ca113b;
           border-radius: 14px;
           box-sizing: border-box;
@@ -134,15 +140,14 @@ def generate_html_pdf(items_list):
           align-items: center;
           text-align: center;
           
-          /* INNER PADDING */
           padding: 16px 20px;
         }}
         .card-logo {{
           position: absolute;
-          top: 8px;
-          right: 10px;
-          width: 32px;
-          height: 32px;
+          top: 10px;
+          right: 12px;
+          width: 38px;
+          height: 38px;
           object-fit: contain;
         }}
         .dish-name {{
@@ -168,6 +173,15 @@ def generate_html_pdf(items_list):
     return HTML(string=html_content).write_pdf()
 
 # --- User Interface ---
+logo_b64 = load_logo_base64()
+
+# Optional logo upload directly in UI if file is missing in GitHub repo
+if not logo_b64:
+    logo_file = st.file_uploader("Upload Brand Logo (PNG/JPEG)", type=["png", "jpg", "jpeg"])
+    if logo_file:
+        encoded_logo = base64.b64encode(logo_file.read()).decode("utf-8")
+        logo_b64 = f"data:{logo_file.type};base64,{encoded_logo}"
+
 uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", type=["jpg", "jpeg", "png"])
 
 if uploaded_image:
@@ -188,7 +202,7 @@ items_list = [line.strip() for line in items_input.split("\n") if line.strip()]
 
 if items_list:
     if st.button("Generate Final PDF"):
-        pdf_bytes = generate_html_pdf(items_list)
+        pdf_bytes = generate_html_pdf(items_list, logo_b64)
         st.success(f"Generated {len(items_list)} cards across {math.ceil(len(items_list)/10)} page(s)!")
         
         st.download_button(
