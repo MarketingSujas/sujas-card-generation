@@ -70,11 +70,10 @@ def clean_and_extract_food_names(raw_ocr_text):
     return extracted_dishes
 
 def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=18, min_font_size=11):
-    """Draws pure black text perfectly centered in both X and Y directions matching sample_2.pdf."""
+    """Draws pure black text perfectly centered vertically & horizontally inside the white frame."""
     font_name = "Helvetica-Bold"
     c.setFillColor(HexColor("#000000"))
 
-    # Determine word-wrap lines
     font_size = start_font_size
     lines = simpleSplit(text, font_name, font_size, max_width)
     
@@ -83,10 +82,10 @@ def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=1
         lines = simpleSplit(text, font_name, font_size, max_width)
         
     c.setFont(font_name, font_size)
-    line_height = font_size * 1.2
+    line_height = font_size * 1.25
     total_block_height = len(lines) * line_height
     
-    # Starting Y position so the middle line aligns precisely with center_y
+    # Calculate initial Y to center the block relative to center_y
     start_y = center_y + (total_block_height / 2.0) - (font_size * 0.8)
     
     for i, line in enumerate(lines):
@@ -104,11 +103,12 @@ def generate_overlay(page_items):
         x_left = col * CARD_WIDTH
         y_bottom = PAGE_HEIGHT - ((row + 1) * CARD_HEIGHT)
         
-        # Absolute geometric midpoint of the A4 card cell
+        # Absolute horizontal center of card
         center_x = x_left + (CARD_WIDTH / 2.0)
-        center_y = y_bottom + (CARD_HEIGHT / 2.0) - (2 * mm)
+        # Vertical center adjusted to sit squarely inside the printable white space
+        center_y = y_bottom + (CARD_HEIGHT * 0.54)
         
-        # Printable boundary padding
+        # Safe printable width padding
         max_width = CARD_WIDTH - (36 * mm)
         
         if item:
