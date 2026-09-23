@@ -3,7 +3,7 @@ import math
 import re
 import os
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageOps
 import pytesseract
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
@@ -70,25 +70,24 @@ def clean_and_extract_food_names(raw_ocr_text):
     return extracted_dishes
 
 def draw_centered_text(c, text, center_x, center_y, max_width, start_font_size=18, min_font_size=11):
-    """Draws pure black text matching the exact line wrapping and vertical centering of sample.pdf."""
+    """Draws pure black text perfectly centered in both X and Y directions matching sample_2.pdf."""
     font_name = "Helvetica-Bold"
-    c.setFillColor(HexColor("#000000"))  # Pure Black
+    c.setFillColor(HexColor("#000000"))
 
-    # Try split at full size
+    # Determine word-wrap lines
     font_size = start_font_size
     lines = simpleSplit(text, font_name, font_size, max_width)
     
-    # Scale down slightly only if it wraps into more than 3 lines
     while len(lines) > 3 and font_size > min_font_size:
         font_size -= 1.0
         lines = simpleSplit(text, font_name, font_size, max_width)
         
     c.setFont(font_name, font_size)
-    line_height = font_size * 1.15
-    total_text_height = len(lines) * line_height
+    line_height = font_size * 1.2
+    total_block_height = len(lines) * line_height
     
-    # Calculate starting Y to center the whole block vertically in the box
-    start_y = center_y + (total_text_height / 2.0) - (font_size * 0.75)
+    # Starting Y position so the middle line aligns precisely with center_y
+    start_y = center_y + (total_block_height / 2.0) - (font_size * 0.8)
     
     for i, line in enumerate(lines):
         y_pos = start_y - (i * line_height)
@@ -105,13 +104,12 @@ def generate_overlay(page_items):
         x_left = col * CARD_WIDTH
         y_bottom = PAGE_HEIGHT - ((row + 1) * CARD_HEIGHT)
         
-        # Center horizontally in the available card space
-        center_x = x_left + (CARD_WIDTH * 0.48)
-        # Center vertically inside the card boundary below top header
-        center_y = y_bottom + (CARD_HEIGHT * 0.46)
+        # Absolute geometric midpoint of the A4 card cell
+        center_x = x_left + (CARD_WIDTH / 2.0)
+        center_y = y_bottom + (CARD_HEIGHT / 2.0) - (2 * mm)
         
-        # Width boundary matching sample padding (prevents overflow off red borders)
-        max_width = CARD_WIDTH - (32 * mm)
+        # Printable boundary padding
+        max_width = CARD_WIDTH - (36 * mm)
         
         if item:
             draw_centered_text(c, str(item).strip(), center_x, center_y, max_width)
@@ -144,7 +142,10 @@ uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", typ
 
 if uploaded_image:
     img = Image.open(uploaded_image)
-    st.image(img, caption="Uploaded Image", use_container_width=True)
+    # Fix orientation automatically from mobile camera EXIF metadata
+    img = ImageOps.exif_transpose(img)
+    
+    st.image(img, caption="Uploaded Image (Orientation Corrected)", use_container_width=True)
     
     if st.button("Extract Dish Names"):
         raw_ocr = pytesseract.image_to_string(img)
