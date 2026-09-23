@@ -1,11 +1,12 @@
 import math
+import re
 import os
 import base64
-import io
+import numpy as np
 import streamlit as st
 from PIL import Image, ImageOps
 from weasyprint import HTML
-from openai import OpenAI
+import easyocr
 
 st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered")
 st.title("SUJA'S KITCHEN - Name Card Generator")
@@ -15,11 +16,12 @@ CARDS_PER_PAGE = 10
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
 
-# Securely retrieve OpenAI API key from Streamlit Cloud Secrets
-openai_api_key = st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
+@st.cache_resource
+def load_ocr_reader():
+    """Loads the free EasyOCR deep learning model into memory once."""
+    return easyocr.Reader(['en'], gpu=False)
 
 def load_logo_base64():
-    """Locates the logo in the repo and converts it to a base64 data URL."""
     possible_filenames = [
         "logo.png", "logo.jpeg", "logo.jpg",
         "Suja's Transparent Logo.jpeg", "Suja's Transparent Logo.png",
@@ -33,50 +35,52 @@ def load_logo_base64():
                 return f"data:{mime};base64,{encoded}"
     return ""
 
-def pil_to_base64_jpeg(pil_img):
-    """Converts a PIL image to a base64 encoded JPEG string."""
-    oriented_img = ImageOps.exif_transpose(pil_img)
-    buffer = io.BytesIO()
-    oriented_img.convert("RGB").save(buffer, format="JPEG")
-    return base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-def extract_dishes_with_openai(pil_img, api_key):
-    """Uses OpenAI Vision (gpt-4o-mini) to extract dish names accurately."""
-    client = OpenAI(api_key=api_key)
-    base64_image = pil_to_base64_jpeg(pil_img)
-
-    prompt = """
-    You are an assistant for a catering company. Analyze this photo of a menu or food list table.
+def clean_and_extract_food_names(raw_lines):
+    extracted_dishes = []
     
-    CRITICAL INSTRUCTIONS:
-    1. Extract ONLY the food dish names.
-    2. Completely IGNORE quantities (e.g., '6 ltr', '10 ltr', '12 kg', '90', '55'), table headers ('Item', 'Office', 'Jafza'), dates, and order numbers.
-    3. Remove unit descriptors from dish names, like '(ltr)', '(kg)', or '(Boneless)'. E.g., 'Chicken khorma (ltr)' becomes 'Chicken Khorma'.
-    4. If a line contains items separated by slashes '/' (e.g., 'Letuce/Tomato/Cucumber/Radish'), SPLIT them into separate dish names, one per line.
-    5. Convert all dish names to Proper Title Case (e.g., 'Papdi Chat', 'Butter Paneer').
-    6. Return ONLY a plain text list with one dish name per line. No bullet points, no markdown formatting, no commentary.
-    """
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        },
-                    },
-                ],
-            }
-        ],
-        max_tokens=600,
-    )
+    ignore_keywords = [
+        "VAN OORD", "PATHRAM", "PAX", "ITEM", "QTY", "SHEET", "OFFICE", "JAFZA",
+        "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+    ]
     
-    return response.choices[0].message.content.strip()
+    for line in raw_lines:
+        clean_line = line.strip()
+        if not clean_line:
+            continue
+            
+        if any(keyword in clean_line.upper() for keyword in ignore_keywords):
+            continue
+
+        if re.search(r'\b\d{1,2}(st|nd|rd|th)?[\/\-\s]', clean_line, re.IGNORECASE):
+            continue
+
+        qty_match = re.search(r'^(.*?)\s+([\d\/\.\s]*(?:Ltr|Kg|Ps|Pcs)?|-)\s*$', clean_line, re.IGNORECASE)
+        
+        if qty_match:
+            item_name = qty_match.group(1).strip()
+            qty_val = qty_match.group(2).strip()
+            if not qty_val or qty_val == "-":
+                continue
+        else:
+            item_name = clean_line
+
+        item_name = re.sub(r'\(.*?\)', '', item_name).strip()
+        item_name = re.sub(r'\s+\d+\s*(Ltr|Kg|Ps|Pcs)?$', '', item_name, flags=re.IGNORECASE).strip()
+
+        if not item_name or item_name.isdigit() or item_name == "-" or len(item_name) < 2:
+            continue
+
+        if '/' in item_name:
+            parts = [p.strip().title() for p in item_name.split('/') if p.strip()]
+            for p in parts:
+                if p not in extracted_dishes and len(p) > 1:
+                    extracted_dishes.append(p)
+        else:
+            formatted_name = item_name.title()
+            if formatted_name not in extracted_dishes:
+                extracted_dishes.append(formatted_name)
+                
+    return extracted_dishes
 
 def generate_html_pdf(items_list, logo_b64):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
@@ -189,19 +193,16 @@ uploaded_image = st.file_uploader("1. Upload Photo from WhatsApp or Camera", typ
 
 if uploaded_image:
     img = Image.open(uploaded_image)
+    img = ImageOps.exif_transpose(img)
     st.image(img, caption="Uploaded Image", use_container_width=True)
     
     if st.button("Extract Dish Names", type="primary"):
-        if not openai_api_key:
-            st.error("OPENAI_API_KEY is missing! Please add OPENAI_API_KEY to your Streamlit Cloud Secrets.")
-        else:
-            with st.spinner("Extracting dish names with OpenAI..."):
-                try:
-                    cleaned_dishes = extract_dishes_with_openai(img, openai_api_key)
-                    st.session_state.dish_text = cleaned_dishes
-                    st.success("Extraction complete!")
-                except Exception as e:
-                    st.error(f"Extraction Error: {str(e)}")
+        with st.spinner("Extracting dish names..."):
+            reader = load_ocr_reader()
+            img_np = np.array(img.convert('RGB'))
+            results = reader.readtext(img_np, detail=0)
+            cleaned_list = clean_and_extract_food_names(results)
+            st.session_state.dish_text = "\n".join(cleaned_list)
 
 st.subheader("2. Review & Edit Items (1 per line)")
 items_input = st.text_area("Dish List", value=st.session_state.dish_text, height=250)
