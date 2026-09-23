@@ -33,7 +33,7 @@ def load_logo_base64():
     return ""
 
 def extract_dishes_with_gemini(pil_img, api_key):
-    """Uses Gemini 1.5 Flash to extract dish names accurately from photos."""
+    """Uses Gemini Flash to extract dish names accurately from photos."""
     client = genai.Client(api_key=api_key)
     
     # Fix orientation from mobile camera EXIF metadata
@@ -51,8 +51,9 @@ def extract_dishes_with_gemini(pil_img, api_key):
     6. Return ONLY a plain text list with one dish name per line. No bullet points, no markdown formatting, no commentary.
     """
 
+    # Using the updated model identifier for google-genai SDK
     response = client.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         contents=[oriented_img, prompt]
     )
     
