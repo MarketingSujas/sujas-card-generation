@@ -139,6 +139,7 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
             <div class="header">
               {logo_html}
               <div class="category-title">Soups & Salads</div>
+              <div class="divider-line"></div>
               <div class="client-name">{client_title}</div>
             </div>
             <div class="items-container">
@@ -156,6 +157,7 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
             <div class="header">
               {logo_html}
               <div class="category-title">Mains & Dessert</div>
+              <div class="divider-line"></div>
               <div class="client-name">{client_title}</div>
             </div>
             <div class="items-container">
@@ -191,7 +193,7 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
           padding: 6mm;
           page-break-after: always;
         }}
-        /* ULTRA-THICK 24PX RED BORDER */
+        /* ULTRA-THICK RED BORDER */
         .menu-border {{
           width: 100%;
           height: 100%;
@@ -206,7 +208,7 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-bottom: 15px;
+          margin-bottom: 10px;
         }}
         .brand-logo {{
           width: 135px;
@@ -214,16 +216,24 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
           object-fit: contain;
           margin-bottom: 10px;
         }}
-        /* LARGER CALLIGRAPHY HEADING (64PX) IN BLACK */
+        /* CURSIVE HEADING IN BLACK */
         .category-title {{
           color: #000000;
           font-family: 'Dancing Script', 'Great Vibes', 'Brush Script MT', cursive;
           font-size: 64px;
           font-weight: 700;
-          margin-bottom: 2px;
+          margin-bottom: 4px;
           line-height: 1.05;
         }}
-        /* SMALL CLIENT/EVENT NAME */
+        /* UNDERLINE BELOW HEADING */
+        .divider-line {{
+          width: 180px;
+          height: 2.5px;
+          background-color: #c8102e;
+          margin-top: 2px;
+          margin-bottom: 8px;
+        }}
+        /* SMALL CLIENT/EVENT NAME BELOW DIVIDER */
         .client-name {{
           color: #000000;
           font-size: 18px;
@@ -242,7 +252,7 @@ def generate_menu_pdf(client_name, soups_salads, mains_desserts, logo_b64):
           padding-top: 15px;
           padding-bottom: 15px;
         }}
-        /* LARGER ALL-CAPS MENU DISH ITEMS (32PX) */
+        /* ALL-CAPS MENU DISH ITEMS */
         .menu-item {{
           color: #000000;
           font-size: 32px;
