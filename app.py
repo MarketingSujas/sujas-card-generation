@@ -1,6 +1,7 @@
 import math
 import re
 import os
+import base64
 import streamlit as st
 from PIL import Image, ImageOps
 import pytesseract
@@ -10,9 +11,17 @@ st.set_page_config(page_title="Suja's Kitchen Card Generator", layout="centered"
 st.title("SUJA'S KITCHEN - Name Card Generator")
 
 CARDS_PER_PAGE = 10
+LOGO_PATH = "logo.png"  # Make sure this matches your uploaded logo filename on GitHub
 
 if "dish_text" not in st.session_state:
     st.session_state.dish_text = ""
+
+def get_image_base64(path):
+    if os.path.exists(path):
+        with open(path, "rb") as image_file:
+            encoded = base64.b64encode(image_file.read()).decode()
+            return f"data:image/png;base64,{encoded}"
+    return ""
 
 def clean_and_extract_food_names(raw_ocr_text):
     lines = raw_ocr_text.split('\n')
@@ -59,6 +68,9 @@ def clean_and_extract_food_names(raw_ocr_text):
 def generate_html_pdf(items_list):
     total_pages = math.ceil(len(items_list) / CARDS_PER_PAGE)
     pages_html = ""
+    logo_base64 = get_image_base64(LOGO_PATH)
+    
+    logo_html = f'<img src="{logo_base64}" class="card-logo" />' if logo_base64 else ''
 
     for p in range(total_pages):
         page_items = items_list[p * CARDS_PER_PAGE : (p + 1) * CARDS_PER_PAGE]
@@ -67,14 +79,14 @@ def generate_html_pdf(items_list):
         for item in page_items:
             cards_html += f"""
             <div class="card-box">
+              {logo_html}
               <p class="dish-name">{item}</p>
             </div>
             """
             
-        # Pad empty cards if last page has fewer than 10 items
         empty_slots = CARDS_PER_PAGE - len(page_items)
         for _ in range(empty_slots):
-            cards_html += '<div class="card-box"></div>'
+            cards_html += f'<div class="card-box">{logo_html}</div>'
 
         pages_html += f'<div class="grid-container">{cards_html}</div>'
 
@@ -102,13 +114,15 @@ def generate_html_pdf(items_list):
           height: 297mm;
           box-sizing: border-box;
           padding: 8mm;
-          gap: 6mm;
+          /* INCREASED CELL SPACING BY 5% (FROM 6mm TO 8mm) */
+          gap: 8mm;
           page-break-after: always;
         }}
         .card-box {{
           position: relative;
-          border: 2px solid #ca113b;
-          border-radius: 12px;
+          /* INCREASED BORDER THICKNESS (FROM 2px TO 3.5px) */
+          border: 3.5px solid #ca113b;
+          border-radius: 14px;
           box-sizing: border-box;
           background: #ffffff;
           overflow: hidden;
@@ -120,8 +134,16 @@ def generate_html_pdf(items_list):
           align-items: center;
           text-align: center;
           
-          /* INNER PADDING & CONTAINMENT */
-          padding: 12px 16px;
+          /* INNER PADDING */
+          padding: 16px 20px;
+        }}
+        .card-logo {{
+          position: absolute;
+          top: 8px;
+          right: 10px;
+          width: 32px;
+          height: 32px;
+          object-fit: contain;
         }}
         .dish-name {{
           color: #000000;
@@ -130,11 +152,9 @@ def generate_html_pdf(items_list):
           width: 100%;
           margin: 0;
           
-          /* TEXT CONTAINMENT & AUTO-WRAP */
           word-wrap: break-word;
           overflow-wrap: break-word;
           
-          /* DYNAMIC FONT SCALING */
           font-size: 20px;
         }}
       </style>
